@@ -1,0 +1,1137 @@
+{
+  "extensionDescription": {
+    "description": "Extension description",
+    "message": "ChromeClaw - 浏览器中的个人AI助手。任何操作系统，任何平台。🦞"
+  },
+  "extensionName": {
+    "description": "Extension name",
+    "message": "ChromeClaw - 浏览器中的个人AI助手 🦞"
+  },
+  "displayErrorInfo": {
+    "message": "发生错误"
+  },
+  "displayErrorDescription": {
+    "message": "抱歉，加载页面时出现问题。"
+  },
+  "displayErrorDetailsInfo": {
+    "message": "错误详情："
+  },
+  "displayErrorUnknownErrorInfo": {
+    "message": "未知错误"
+  },
+  "displayErrorReset": {
+    "message": "重新运行"
+  },
+  "firstRun_welcome": {
+    "message": "欢迎使用 ChromeClaw"
+  },
+  "firstRun_addApiKey": {
+    "message": "添加您的 API 密钥以开始聊天"
+  },
+  "firstRun_apiKeyRequired": {
+    "message": "需要 API 密钥（或设置 Base URL 以使用免认证代理）"
+  },
+  "firstRun_modelIdRequired": {
+    "message": "模型 ID 为必填项"
+  },
+  "firstRun_saveFailed": {
+    "message": "保存模型失败"
+  },
+  "firstRun_provider": {
+    "message": "提供商"
+  },
+  "firstRun_apiKey": {
+    "message": "API 密钥"
+  },
+  "firstRun_apiKeyOptional": {
+    "message": "API 密钥（可选）"
+  },
+  "firstRun_modelId": {
+    "message": "模型 ID"
+  },
+  "firstRun_baseUrl": {
+    "message": "Base URL（可选）"
+  },
+  "firstRun_baseUrlHint": {
+    "message": "用于 OpenAI 兼容（ollama、copilot-api 等）"
+  },
+  "firstRun_startChatting": {
+    "message": "开始聊天"
+  },
+  "firstRun_advancedSetup": {
+    "message": "高级设置"
+  },
+  "chat_placeholder": {
+    "message": "你想了解什么？"
+  },
+  "chat_modelSelect": {
+    "message": "模型"
+  },
+  "chat_fileSizeError": {
+    "message": "文件「$FILE_NAME$」超过 10MB 限制。",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "chat_fileReadError": {
+    "message": "无法读取「$FILE_NAME$」。",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "chat_maxFilesError": {
+    "message": "最多允许 $MAX_FILES$ 个文件。",
+    "placeholders": {
+      "max_files": {
+        "content": "$1"
+      }
+    }
+  },
+  "session_newSession": {
+    "message": "新会话"
+  },
+  "session_rename": {
+    "message": "重命名"
+  },
+  "session_delete": {
+    "message": "删除"
+  },
+  "session_searchPlaceholder": {
+    "message": "搜索聊天..."
+  },
+  "session_noMatching": {
+    "message": "没有匹配的会话"
+  },
+  "session_noSessions": {
+    "message": "暂无会话"
+  },
+  "session_today": {
+    "message": "今天"
+  },
+  "session_yesterday": {
+    "message": "昨天"
+  },
+  "session_last7Days": {
+    "message": "最近 7 天"
+  },
+  "session_last30Days": {
+    "message": "最近 30 天"
+  },
+  "session_older": {
+    "message": "更早"
+  },
+  "session_deleteTitle": {
+    "message": "删除会话"
+  },
+  "session_deleteDescription": {
+    "message": "这将永久删除此会话及其所有消息。此操作无法撤销。"
+  },
+  "session_deleteAllTitle": {
+    "message": "删除所有会话？"
+  },
+  "session_deleteAllDescription": {
+    "message": "这将永久删除所有会话、消息和工件。此操作无法撤销。"
+  },
+  "common_cancel": {
+    "message": "取消"
+  },
+  "common_delete": {
+    "message": "删除"
+  },
+  "common_deleteAll": {
+    "message": "全部删除"
+  },
+  "common_save": {
+    "message": "保存"
+  },
+  "common_saved": {
+    "message": "已保存"
+  },
+  "common_confirm": {
+    "message": "确认"
+  },
+  "common_ok": {
+    "message": "确定"
+  },
+  "common_loading": {
+    "message": "加载中..."
+  },
+  "common_error": {
+    "message": "错误"
+  },
+  "common_on": {
+    "message": "开"
+  },
+  "common_off": {
+    "message": "关"
+  },
+  "common_enabled": {
+    "message": "已启用"
+  },
+  "common_disabled": {
+    "message": "已禁用"
+  },
+  "toolbar_elementary": {
+    "message": "小学"
+  },
+  "toolbar_middleSchool": {
+    "message": "初中"
+  },
+  "toolbar_keepLevel": {
+    "message": "保持当前级别"
+  },
+  "toolbar_highSchool": {
+    "message": "高中"
+  },
+  "toolbar_college": {
+    "message": "大学"
+  },
+  "toolbar_graduate": {
+    "message": "研究生"
+  },
+  "toolbar_adjustReading": {
+    "message": "请将阅读级别调整为$LEVEL$级别。",
+    "placeholders": {
+      "level": {
+        "content": "$1"
+      }
+    }
+  },
+  "slash_notEnoughMessages": {
+    "message": "消息不足，无法压缩"
+  },
+  "slash_compacting": {
+    "message": "正在压缩对话..."
+  },
+  "slash_noResponse": {
+    "message": "后台无响应（Service Worker 可能已重启）"
+  },
+  "slash_conversationSummary": {
+    "message": "[对话摘要]"
+  },
+  "slash_earlierCompacted": {
+    "message": "[早期消息已压缩]"
+  },
+  "slash_compactSuccess": {
+    "message": "对话已压缩"
+  },
+  "slash_compactFailed": {
+    "message": "压缩失败"
+  },
+  "slash_conversationCleared": {
+    "message": "对话已清除"
+  },
+  "slash_availableCommands": {
+    "message": "可用命令："
+  },
+  "toast_offline": {
+    "message": "您已离线，请检查网络连接。"
+  },
+  "toast_online": {
+    "message": "已恢复在线。"
+  },
+  "toast_allSessionsCleared": {
+    "message": "所有会话已清除"
+  },
+  "toast_subagentFinished": {
+    "message": "Subagent已完成：$TASK$",
+    "placeholders": {
+      "task": {
+        "content": "$1"
+      }
+    }
+  },
+  "toast_scheduledTask": {
+    "message": "已计划：$TASK$",
+    "placeholders": {
+      "task": {
+        "content": "$1"
+      }
+    }
+  },
+  "toast_scheduledTaskFired": {
+    "message": "计划任务已触发"
+  },
+  "toast_newTelegramMessage": {
+    "message": "收到新的 Telegram 消息"
+  },
+  "toast_view": {
+    "message": "查看"
+  },
+  "settings_title": {
+    "message": "设置"
+  },
+  "settings_description": {
+    "message": "配置外观和偏好设置"
+  },
+  "settings_appearance": {
+    "message": "外观"
+  },
+  "settings_theme": {
+    "message": "主题"
+  },
+  "settings_themeSystem": {
+    "message": "跟随系统"
+  },
+  "settings_themeLight": {
+    "message": "浅色"
+  },
+  "settings_themeDark": {
+    "message": "深色"
+  },
+  "settings_language": {
+    "message": "语言"
+  },
+  "settings_languageAuto": {
+    "message": "自动（浏览器默认）"
+  },
+  "model_title": {
+    "message": "模型配置"
+  },
+  "model_description": {
+    "message": "管理聊天 AI 模型"
+  },
+  "model_customModels": {
+    "message": "自定义模型"
+  },
+  "model_addModel": {
+    "message": "添加模型"
+  },
+  "model_editModel": {
+    "message": "编辑模型"
+  },
+  "model_noModels": {
+    "message": "尚未配置自定义模型。添加一个模型以开始使用。"
+  },
+  "model_downloadModel": {
+    "message": "下载模型"
+  },
+  "model_deleteCachedModel": {
+    "message": "删除已缓存的模型"
+  },
+  "model_deleteModel": {
+    "message": "删除模型？"
+  },
+  "model_deleteCache": {
+    "message": "删除已缓存的模型？"
+  },
+  "model_downloaded": {
+    "message": "已下载"
+  },
+  "model_notDownloaded": {
+    "message": "未下载"
+  },
+  "model_localDescription": {
+    "message": "配置本地设备模型，无需 API 密钥。"
+  },
+  "model_remoteDescription": {
+    "message": "配置模型提供商和连接信息。"
+  },
+  "model_name": {
+    "message": "名称"
+  },
+  "model_apiFormat": {
+    "message": "API 格式"
+  },
+  "model_autoDetect": {
+    "message": "自动检测"
+  },
+  "model_chatCompletions": {
+    "message": "Chat Completions (/v1/chat/completions)"
+  },
+  "model_responses": {
+    "message": "Responses (/v1/responses)"
+  },
+  "model_codexResponses": {
+    "message": "Codex Responses (/v1/responses)"
+  },
+  "model_descriptionOptional": {
+    "message": "描述（可选）"
+  },
+  "model_supportsTools": {
+    "message": "支持工具调用"
+  },
+  "model_supportsReasoning": {
+    "message": "支持推理"
+  },
+  "model_toolTimeout": {
+    "message": "工具超时（秒）"
+  },
+  "model_toolTimeoutHint": {
+    "message": "工具执行的最大时间（默认：600 秒 / 10 分钟）"
+  },
+  "model_contextWindow": {
+    "message": "上下文窗口（token 数）"
+  },
+  "model_contextWindowPlaceholder": {
+    "message": "从模型 ID 自动检测"
+  },
+  "model_contextWindowHint": {
+    "message": "覆盖用于压缩的上下文窗口大小。留空则自动检测。"
+  },
+  "model_downloading": {
+    "message": "正在下载模型..."
+  },
+  "model_downloadComplete": {
+    "message": "下载完成"
+  },
+  "model_downloadFailed": {
+    "message": "下载失败"
+  },
+  "model_testConnection": {
+    "message": "测试连接"
+  },
+  "model_connectionFailed": {
+    "message": "连接失败"
+  },
+  "model_baseUrlNeeded": {
+    "message": "连接测试需要 Base URL"
+  },
+  "model_nameRequired": {
+    "message": "名称为必填项"
+  },
+  "model_providerRequired": {
+    "message": "提供商为必填项"
+  },
+  "model_baseUrlInvalid": {
+    "message": "Base URL 必须以 http:// 或 https:// 开头"
+  },
+  "model_huggingFaceModelId": {
+    "message": "HuggingFace 模型 ID"
+  },
+  "skill_title": {
+    "message": "技能"
+  },
+  "skill_description": {
+    "message": "技能为 LLM 提供按需读取的特定任务指导。"
+  },
+  "skill_browserWarning": {
+    "message": "技能在 Chrome 浏览器环境中运行——不支持 CLI 工具、Python 脚本和其他本地可执行文件。"
+  },
+  "skill_installedSkills": {
+    "message": "已安装的技能"
+  },
+  "skill_importZip": {
+    "message": "导入 Zip"
+  },
+  "skill_newSkill": {
+    "message": "新建技能"
+  },
+  "skill_loadingSkills": {
+    "message": "正在加载技能…"
+  },
+  "skill_noSkills": {
+    "message": "尚未安装技能"
+  },
+  "skill_deleted": {
+    "message": "技能已删除"
+  },
+  "skill_importExists": {
+    "message": "技能 $PATH$ 已存在。请先删除或重命名导入。",
+    "placeholders": {
+      "path": {
+        "content": "$1"
+      }
+    }
+  },
+  "skill_importedSkill": {
+    "message": "已导入技能：$SKILL_NAME$",
+    "placeholders": {
+      "skill_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "skill_importFailed": {
+    "message": "技能导入失败"
+  },
+  "skill_deleteConfirm": {
+    "message": "删除技能「$SKILL_NAME$」？此操作无法撤销。",
+    "placeholders": {
+      "skill_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "sessionMgr_title": {
+    "message": "会话"
+  },
+  "sessionMgr_searchPlaceholder": {
+    "message": "搜索会话..."
+  },
+  "sessionMgr_noMatching": {
+    "message": "没有匹配的会话。"
+  },
+  "sessionMgr_noSessions": {
+    "message": "暂无会话。"
+  },
+  "sessionMgr_clickToSelect": {
+    "message": "单击选择，双击打开"
+  },
+  "sessionMgr_clickToSelectSidePanel": {
+    "message": "单击选择，双击在侧边栏中打开"
+  },
+  "telegram_title": {
+    "message": "Telegram 机器人"
+  },
+  "telegram_description": {
+    "message": "连接 Telegram 机器人，以便从 Telegram 与 AI 助手聊天。"
+  },
+  "telegram_enableBot": {
+    "message": "启用 Telegram 机器人"
+  },
+  "telegram_botToken": {
+    "message": "Bot Token"
+  },
+  "telegram_validate": {
+    "message": "验证"
+  },
+  "telegram_tokenValid": {
+    "message": "Token 有效"
+  },
+  "telegram_invalidToken": {
+    "message": "无效的 Token"
+  },
+  "telegram_allowedUserIds": {
+    "message": "允许的用户 ID"
+  },
+  "telegram_userIdsHint": {
+    "message": "仅处理来自这些 Telegram 用户 ID 的消息。从 @userinfobot 获取您的 ID，必须为数字。"
+  },
+  "telegram_noUsers": {
+    "message": "尚无允许的用户。添加至少一个用户 ID 以开始接收消息。"
+  },
+  "telegram_loadFailed": {
+    "message": "加载配置失败"
+  },
+  "telegram_validationFailed": {
+    "message": "验证失败"
+  },
+  "telegram_saveFailed": {
+    "message": "保存失败"
+  },
+  "telegram_toggleFailed": {
+    "message": "切换失败"
+  },
+  "agents_newAgent": {
+    "message": "新建智能体"
+  },
+  "agents_mainAgent": {
+    "message": "主智能体"
+  },
+  "agents_deleteAgent": {
+    "message": "删除智能体"
+  },
+  "agents_deleteAgentConfirm": {
+    "message": "删除此智能体及其所有数据？此操作无法撤销。"
+  },
+  "agents_overview": {
+    "message": "概览"
+  },
+  "agents_files": {
+    "message": "文件"
+  },
+  "agents_tools": {
+    "message": "工具"
+  },
+  "agents_skills": {
+    "message": "技能"
+  },
+  "agents_workspaceFiles": {
+    "message": "工作区文件"
+  },
+  "agents_agentCreated": {
+    "message": "智能体已创建"
+  },
+  "agents_agentDeleted": {
+    "message": "智能体已删除"
+  },
+  "agents_deleteAgentFailed": {
+    "message": "删除智能体失败"
+  },
+  "agents_fileDeleted": {
+    "message": "文件已删除"
+  },
+  "agents_fileUploaded": {
+    "message": "文件已上传"
+  },
+  "agents_fileRenamed": {
+    "message": "文件已重命名"
+  },
+  "agents_cannotRenamePredefined": {
+    "message": "无法重命名包含预定义文件的文件夹"
+  },
+  "agents_cannotDeletePredefined": {
+    "message": "无法删除包含预定义文件的文件夹"
+  },
+  "agents_folderRenamed": {
+    "message": "文件夹已重命名"
+  },
+  "agents_folderDeleted": {
+    "message": "文件夹已删除"
+  },
+  "agents_folderEmpty": {
+    "message": "文件夹为空"
+  },
+  "agents_fileSaved": {
+    "message": "文件已保存"
+  },
+  "agents_identity": {
+    "message": "身份"
+  },
+  "agents_identityHint": {
+    "message": "在「文件」选项卡的 IDENTITY.md 文件中编辑这些值。"
+  },
+  "agents_notSet": {
+    "message": "（未设置）"
+  },
+  "agents_justNow": {
+    "message": "刚刚"
+  },
+  "agents_minutesAgo": {
+    "message": "$MINUTES$分钟前",
+    "placeholders": {
+      "minutes": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_hoursAgo": {
+    "message": "$HOURS$小时前",
+    "placeholders": {
+      "hours": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_daysAgo": {
+    "message": "$DAYS$天前",
+    "placeholders": {
+      "days": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_monthsAgo": {
+    "message": "$MONTHS$个月前",
+    "placeholders": {
+      "months": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_deleteFile": {
+    "message": "删除文件"
+  },
+  "agents_deleteFileConfirm": {
+    "message": "删除「$FILE_NAME$」？此操作无法撤销。",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_deleteFolder": {
+    "message": "删除文件夹"
+  },
+  "agents_deleteFolderConfirm": {
+    "message": "删除文件夹「$FOLDER_NAME$」及其中的 $FILE_COUNT$ 个文件？此操作无法撤销。",
+    "placeholders": {
+      "folder_name": {
+        "content": "$1"
+      },
+      "file_count": {
+        "content": "$2"
+      }
+    }
+  },
+  "agents_renameFile": {
+    "message": "重命名文件"
+  },
+  "agents_renameFolder": {
+    "message": "重命名文件夹"
+  },
+  "agents_newFile": {
+    "message": "新建文件"
+  },
+  "agents_newFolder": {
+    "message": "新建文件夹"
+  },
+  "agents_newFolderName": {
+    "message": "新文件夹名称"
+  },
+  "agents_upload": {
+    "message": "上传"
+  },
+  "agents_edit": {
+    "message": "编辑"
+  },
+  "agents_download": {
+    "message": "下载"
+  },
+  "agents_downloadFolderZip": {
+    "message": "下载文件夹为 ZIP"
+  },
+  "agents_refresh": {
+    "message": "刷新"
+  },
+  "agents_importZip": {
+    "message": "导入 ZIP"
+  },
+  "optionsPage_title": {
+    "message": "ChromeClaw 设置"
+  },
+  "provider_openai": {
+    "message": "OpenAI"
+  },
+  "provider_anthropic": {
+    "message": "Anthropic"
+  },
+  "provider_google": {
+    "message": "Google"
+  },
+  "provider_openrouter": {
+    "message": "OpenRouter"
+  },
+  "provider_openaiCompatible": {
+    "message": "OpenAI 兼容"
+  },
+  "provider_webgpu": {
+    "message": "WebGPU（本地设备）"
+  },
+  "time_mAgo": {
+    "message": "$MINUTES$分钟前",
+    "placeholders": {
+      "minutes": {
+        "content": "$1"
+      }
+    }
+  },
+  "time_hAgo": {
+    "message": "$HOURS$小时前",
+    "placeholders": {
+      "hours": {
+        "content": "$1"
+      }
+    }
+  },
+  "time_dAgo": {
+    "message": "$DAYS$天前",
+    "placeholders": {
+      "days": {
+        "content": "$1"
+      }
+    }
+  },
+  "tabGroup_control": {
+    "message": "控制"
+  },
+  "tabGroup_agent": {
+    "message": "AI 智能体"
+  },
+  "tabGroup_settings": {
+    "message": "设置"
+  },
+  "tab_channels": {
+    "message": "频道"
+  },
+  "tab_cronJobs": {
+    "message": "定时任务"
+  },
+  "tab_sessions": {
+    "message": "会话"
+  },
+  "tab_usage": {
+    "message": "用量"
+  },
+  "tab_agents": {
+    "message": "智能体"
+  },
+  "tab_tools": {
+    "message": "工具"
+  },
+  "tab_skills": {
+    "message": "技能"
+  },
+  "tab_general": {
+    "message": "通用"
+  },
+  "tab_models": {
+    "message": "模型"
+  },
+  "tab_actions": {
+    "message": "快捷操作"
+  },
+  "tab_logs": {
+    "message": "日志"
+  },
+  "whatsapp_title": {
+    "message": "WhatsApp"
+  },
+  "whatsapp_description": {
+    "message": "连接 WhatsApp，通过手机与 AI 助手聊天。使用 WhatsApp Web 协议——无需外部服务器。"
+  },
+  "whatsapp_connection": {
+    "message": "连接"
+  },
+  "whatsapp_connect": {
+    "message": "连接"
+  },
+  "whatsapp_disconnect": {
+    "message": "断开"
+  },
+  "whatsapp_disconnected": {
+    "message": "已断开"
+  },
+  "whatsapp_connecting": {
+    "message": "等待扫描二维码..."
+  },
+  "whatsapp_connected": {
+    "message": "已连接"
+  },
+  "whatsapp_reconnecting": {
+    "message": "重新连接中..."
+  },
+  "whatsapp_loggedOut": {
+    "message": "已退出"
+  },
+  "whatsapp_scanQr": {
+    "message": "使用 WhatsApp 扫描"
+  },
+  "whatsapp_scanInstructions": {
+    "message": "打开手机上的 WhatsApp → 设置 → 已关联的设备 → 关联设备"
+  },
+  "whatsapp_connectedMsg": {
+    "message": "WhatsApp 已连接，正在接收消息"
+  },
+  "whatsapp_reconnectingMsg": {
+    "message": "正在重新连接 WhatsApp..."
+  },
+  "whatsapp_allowedNumbers": {
+    "message": "允许的电话号码"
+  },
+  "whatsapp_numbersHint": {
+    "message": "仅处理来自这些电话号码的消息。请输入带国家代码的号码（例如 +8613800138000）。"
+  },
+  "whatsapp_noNumbers": {
+    "message": "尚无允许的号码。添加至少一个电话号码以开始接收消息。"
+  },
+  "whatsapp_messageDirection": {
+    "message": "消息方向"
+  },
+  "whatsapp_directionHint": {
+    "message": "控制 AI 助手处理哪些消息。"
+  },
+  "whatsapp_processMyMessages": {
+    "message": "处理我自己的消息"
+  },
+  "whatsapp_processOthers": {
+    "message": "处理他人的消息"
+  },
+  "whatsapp_connectionFailed": {
+    "message": "连接失败"
+  },
+  "whatsapp_disconnectFailed": {
+    "message": "断开失败"
+  },
+  "whatsapp_saveFailed": {
+    "message": "保存失败"
+  },
+  "whatsapp_loadFailed": {
+    "message": "加载配置失败"
+  },
+  "cron_title": {
+    "message": "定时任务"
+  },
+  "cron_description": {
+    "message": "管理 AI 智能体创建的自动化任务"
+  },
+  "cron_active": {
+    "message": "运行中"
+  },
+  "cron_stopped": {
+    "message": "已停止"
+  },
+  "cron_noJobs": {
+    "message": "暂无定时任务。让 AI 为你安排一个任务吧。"
+  },
+  "cron_runHistory": {
+    "message": "运行历史"
+  },
+  "cron_noRuns": {
+    "message": "暂无运行记录"
+  },
+  "cron_next": {
+    "message": "下次：$TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_last": {
+    "message": "上次：$TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_duration": {
+    "message": "时长：$DURATION$",
+    "placeholders": {
+      "duration": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_onceAt": {
+    "message": "在 $TIME$ 执行一次",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_every": {
+    "message": "每 $INTERVAL$",
+    "placeholders": {
+      "interval": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_title": {
+    "message": "用量"
+  },
+  "usage_description": {
+    "message": "所有会话的 Token 使用情况"
+  },
+  "usage_sessions": {
+    "message": "会话数"
+  },
+  "usage_totalTokens": {
+    "message": "总 Token 数"
+  },
+  "usage_input": {
+    "message": "输入"
+  },
+  "usage_output": {
+    "message": "输出"
+  },
+  "usage_average": {
+    "message": "平均：$COUNT$ token/会话",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_sessionsByUsage": {
+    "message": "按用量排列的会话"
+  },
+  "usage_compacted": {
+    "message": "已压缩 $COUNT$ 次",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_moreSessionsCount": {
+    "message": "...还有 $COUNT$ 个会话",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_title": {
+    "message": "快捷操作"
+  },
+  "actions_description": {
+    "message": "自定义空聊天界面显示的快捷提示（最多 $MAX$ 个）",
+    "placeholders": {
+      "max": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_heading": {
+    "message": "操作"
+  },
+  "actions_resetDefaults": {
+    "message": "恢复默认"
+  },
+  "actions_addAction": {
+    "message": "添加操作"
+  },
+  "actions_noActions": {
+    "message": "尚未配置快捷操作。添加一个或恢复默认值。"
+  },
+  "actions_actionNumber": {
+    "message": "操作 $NUMBER$",
+    "placeholders": {
+      "number": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_moveUp": {
+    "message": "上移"
+  },
+  "actions_moveDown": {
+    "message": "下移"
+  },
+  "actions_remove": {
+    "message": "移除"
+  },
+  "actions_labelPlaceholder": {
+    "message": "按钮标签（显示在聊天界面上）"
+  },
+  "actions_promptPlaceholder": {
+    "message": "点击时发送给 AI 的完整提示"
+  },
+  "tool_title": {
+    "message": "工具配置"
+  },
+  "tool_description": {
+    "message": "启用或禁用 AI 工具"
+  },
+  "tool_searchProvider": {
+    "message": "搜索提供商"
+  },
+  "tool_selectProvider": {
+    "message": "选择提供商"
+  },
+  "tool_apiKey": {
+    "message": "API 密钥"
+  },
+  "tool_searchEngine": {
+    "message": "搜索引擎"
+  },
+  "tool_selectEngine": {
+    "message": "选择引擎"
+  },
+  "tool_noApiKey": {
+    "message": "无需 API 密钥 - 使用浏览器自动化"
+  },
+  "tool_subTopics": {
+    "message": "子主题"
+  },
+  "tool_iterationsPerTopic": {
+    "message": "每个主题的迭代次数"
+  },
+  "tool_sourcesPerSearch": {
+    "message": "每次搜索的来源数"
+  },
+  "tool_timeout": {
+    "message": "超时（秒）"
+  },
+  "tool_clientId": {
+    "message": "客户端 ID"
+  },
+  "tool_connectGoogle": {
+    "message": "连接 Google 账户"
+  },
+  "tool_connecting": {
+    "message": "连接中..."
+  },
+  "tool_connectedAs": {
+    "message": "已连接为"
+  },
+  "tool_disconnect": {
+    "message": "断开连接"
+  },
+  "tool_failedToConnect": {
+    "message": "连接失败"
+  },
+  "tool_googleServices": {
+    "message": "Google 服务"
+  },
+  "tool_enableGoogleHint": {
+    "message": "连接您的 Google 账户以启用这些工具"
+  },
+  "tab_chat": {
+    "message": "聊天"
+  },
+  "log_title": {
+    "message": "日志"
+  },
+  "log_description": {
+    "message": "查看扩展调试日志。日志存储在内存中，扩展重启后会被清除。"
+  },
+  "log_enableLogging": {
+    "message": "启用日志记录"
+  },
+  "log_minLevel": {
+    "message": "最低级别："
+  },
+  "log_allLevels": {
+    "message": "所有级别"
+  },
+  "log_allCategories": {
+    "message": "所有分类"
+  },
+  "log_searchPlaceholder": {
+    "message": "搜索消息..."
+  },
+  "log_live": {
+    "message": "实时"
+  },
+  "log_stop": {
+    "message": "停止"
+  },
+  "log_clear": {
+    "message": "清除"
+  },
+  "log_noEntries": {
+    "message": "暂无日志条目"
+  },
+  "log_noMatch": {
+    "message": "没有匹配筛选条件的条目"
+  },
+  "log_copyEntry": {
+    "message": "复制条目"
+  },
+  "log_exportText": {
+    "message": "导出文本"
+  },
+  "log_exportJson": {
+    "message": "导出 JSON"
+  },
+  "log_copyAll": {
+    "message": "全部复制"
+  },
+  "log_copiedCount": {
+    "message": "已复制 $COUNT$ 条日志到剪贴板",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "log_entriesCount": {
+    "message": "$COUNT$ 条日志",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "log_droppedCount": {
+    "message": "$COUNT$ 条已丢弃",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_title": {
+    "message": "智能体"
+  }
+}

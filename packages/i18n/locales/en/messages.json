@@ -1,0 +1,1137 @@
+{
+  "extensionDescription": {
+    "description": "Extension description",
+    "message": "ChromeClaw - Your own personal AI assistant in your browser. Any OS. Any Platform. 🦞"
+  },
+  "extensionName": {
+    "description": "Extension name",
+    "message": "ChromeClaw - Your own personal AI assistant in your browser. 🦞"
+  },
+  "displayErrorInfo": {
+    "message": "Error occur"
+  },
+  "displayErrorDescription": {
+    "message": "Sorry, something went wrong while loading the page."
+  },
+  "displayErrorDetailsInfo": {
+    "message": "Error details:"
+  },
+  "displayErrorUnknownErrorInfo": {
+    "message": "Unknown error"
+  },
+  "displayErrorReset": {
+    "message": "Run Again"
+  },
+  "firstRun_welcome": {
+    "message": "Welcome to ChromeClaw"
+  },
+  "firstRun_addApiKey": {
+    "message": "Add your API key to start chatting"
+  },
+  "firstRun_apiKeyRequired": {
+    "message": "API key is required (or set a Base URL for auth-free proxies)"
+  },
+  "firstRun_modelIdRequired": {
+    "message": "Model ID is required"
+  },
+  "firstRun_saveFailed": {
+    "message": "Failed to save model"
+  },
+  "firstRun_provider": {
+    "message": "Provider"
+  },
+  "firstRun_apiKey": {
+    "message": "API Key"
+  },
+  "firstRun_apiKeyOptional": {
+    "message": "API Key (optional for proxies)"
+  },
+  "firstRun_modelId": {
+    "message": "Model ID"
+  },
+  "firstRun_baseUrl": {
+    "message": "Base URL (optional)"
+  },
+  "firstRun_baseUrlHint": {
+    "message": "For OpenAI-compatible proxies (ollama, copilot-api, etc.)"
+  },
+  "firstRun_startChatting": {
+    "message": "Start Chatting"
+  },
+  "firstRun_advancedSetup": {
+    "message": "Advanced setup"
+  },
+  "chat_placeholder": {
+    "message": "What would you like to know?"
+  },
+  "chat_modelSelect": {
+    "message": "Model"
+  },
+  "chat_fileSizeError": {
+    "message": "File \"$FILE_NAME$\" exceeds 10MB limit.",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "chat_fileReadError": {
+    "message": "Failed to read \"$FILE_NAME$\".",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "chat_maxFilesError": {
+    "message": "Maximum $MAX_FILES$ files allowed.",
+    "placeholders": {
+      "max_files": {
+        "content": "$1"
+      }
+    }
+  },
+  "session_newSession": {
+    "message": "New Session"
+  },
+  "session_rename": {
+    "message": "Rename"
+  },
+  "session_delete": {
+    "message": "Delete"
+  },
+  "session_searchPlaceholder": {
+    "message": "Search chats..."
+  },
+  "session_noMatching": {
+    "message": "No matching sessions"
+  },
+  "session_noSessions": {
+    "message": "No sessions yet"
+  },
+  "session_today": {
+    "message": "Today"
+  },
+  "session_yesterday": {
+    "message": "Yesterday"
+  },
+  "session_last7Days": {
+    "message": "Last 7 days"
+  },
+  "session_last30Days": {
+    "message": "Last 30 days"
+  },
+  "session_older": {
+    "message": "Older"
+  },
+  "session_deleteTitle": {
+    "message": "Delete Session"
+  },
+  "session_deleteDescription": {
+    "message": "This will permanently delete this session and all its messages. This action cannot be undone."
+  },
+  "session_deleteAllTitle": {
+    "message": "Delete all sessions?"
+  },
+  "session_deleteAllDescription": {
+    "message": "This will permanently delete all sessions, messages, and artifacts. This cannot be undone."
+  },
+  "common_cancel": {
+    "message": "Cancel"
+  },
+  "common_delete": {
+    "message": "Delete"
+  },
+  "common_deleteAll": {
+    "message": "Delete All"
+  },
+  "common_save": {
+    "message": "Save"
+  },
+  "common_saved": {
+    "message": "Saved"
+  },
+  "common_confirm": {
+    "message": "Confirm"
+  },
+  "common_ok": {
+    "message": "OK"
+  },
+  "common_loading": {
+    "message": "Loading..."
+  },
+  "common_error": {
+    "message": "Error"
+  },
+  "common_on": {
+    "message": "ON"
+  },
+  "common_off": {
+    "message": "OFF"
+  },
+  "common_enabled": {
+    "message": "Enabled"
+  },
+  "common_disabled": {
+    "message": "Disabled"
+  },
+  "toolbar_elementary": {
+    "message": "Elementary"
+  },
+  "toolbar_middleSchool": {
+    "message": "Middle School"
+  },
+  "toolbar_keepLevel": {
+    "message": "Keep current level"
+  },
+  "toolbar_highSchool": {
+    "message": "High School"
+  },
+  "toolbar_college": {
+    "message": "College"
+  },
+  "toolbar_graduate": {
+    "message": "Graduate"
+  },
+  "toolbar_adjustReading": {
+    "message": "Please adjust the reading level to $LEVEL$ level.",
+    "placeholders": {
+      "level": {
+        "content": "$1"
+      }
+    }
+  },
+  "slash_notEnoughMessages": {
+    "message": "Not enough messages to compact"
+  },
+  "slash_compacting": {
+    "message": "Compacting conversation..."
+  },
+  "slash_noResponse": {
+    "message": "No response from background (service worker may have restarted)"
+  },
+  "slash_conversationSummary": {
+    "message": "[Conversation summary]"
+  },
+  "slash_earlierCompacted": {
+    "message": "[Earlier messages compacted]"
+  },
+  "slash_compactSuccess": {
+    "message": "Conversation compacted"
+  },
+  "slash_compactFailed": {
+    "message": "Compaction failed"
+  },
+  "slash_conversationCleared": {
+    "message": "Conversation cleared"
+  },
+  "slash_availableCommands": {
+    "message": "Available commands:"
+  },
+  "toast_offline": {
+    "message": "You are offline. Check your network connection."
+  },
+  "toast_online": {
+    "message": "Back online."
+  },
+  "toast_allSessionsCleared": {
+    "message": "All sessions cleared"
+  },
+  "toast_subagentFinished": {
+    "message": "Subagent finished: $TASK$",
+    "placeholders": {
+      "task": {
+        "content": "$1"
+      }
+    }
+  },
+  "toast_scheduledTask": {
+    "message": "Scheduled: $TASK$",
+    "placeholders": {
+      "task": {
+        "content": "$1"
+      }
+    }
+  },
+  "toast_scheduledTaskFired": {
+    "message": "Scheduled task fired"
+  },
+  "toast_newTelegramMessage": {
+    "message": "New Telegram message"
+  },
+  "toast_view": {
+    "message": "View"
+  },
+  "settings_title": {
+    "message": "Settings"
+  },
+  "settings_description": {
+    "message": "Configure appearance and preferences"
+  },
+  "settings_appearance": {
+    "message": "Appearance"
+  },
+  "settings_theme": {
+    "message": "Theme"
+  },
+  "settings_themeSystem": {
+    "message": "System"
+  },
+  "settings_themeLight": {
+    "message": "Light"
+  },
+  "settings_themeDark": {
+    "message": "Dark"
+  },
+  "settings_language": {
+    "message": "Language"
+  },
+  "settings_languageAuto": {
+    "message": "Auto (browser default)"
+  },
+  "model_title": {
+    "message": "Model Configuration"
+  },
+  "model_description": {
+    "message": "Manage AI models for chat"
+  },
+  "model_customModels": {
+    "message": "Custom Models"
+  },
+  "model_addModel": {
+    "message": "Add Model"
+  },
+  "model_editModel": {
+    "message": "Edit Model"
+  },
+  "model_noModels": {
+    "message": "No custom models configured. Add a model to get started."
+  },
+  "model_downloadModel": {
+    "message": "Download model"
+  },
+  "model_deleteCachedModel": {
+    "message": "Delete cached model"
+  },
+  "model_deleteModel": {
+    "message": "Delete model?"
+  },
+  "model_deleteCache": {
+    "message": "Delete cached model?"
+  },
+  "model_downloaded": {
+    "message": "Downloaded"
+  },
+  "model_notDownloaded": {
+    "message": "Not Downloaded"
+  },
+  "model_localDescription": {
+    "message": "Configure a local on-device model. No API key needed."
+  },
+  "model_remoteDescription": {
+    "message": "Configure the model provider and connection details."
+  },
+  "model_name": {
+    "message": "Name"
+  },
+  "model_apiFormat": {
+    "message": "API Format"
+  },
+  "model_autoDetect": {
+    "message": "Auto-detect"
+  },
+  "model_chatCompletions": {
+    "message": "Chat Completions (/v1/chat/completions)"
+  },
+  "model_responses": {
+    "message": "Responses (/v1/responses)"
+  },
+  "model_codexResponses": {
+    "message": "Codex Responses (/v1/responses)"
+  },
+  "model_descriptionOptional": {
+    "message": "Description (optional)"
+  },
+  "model_supportsTools": {
+    "message": "Supports Tools"
+  },
+  "model_supportsReasoning": {
+    "message": "Supports Reasoning"
+  },
+  "model_toolTimeout": {
+    "message": "Tool Timeout (seconds)"
+  },
+  "model_toolTimeoutHint": {
+    "message": "Maximum time for tool execution before stopping (default: 600s / 10 min)"
+  },
+  "model_contextWindow": {
+    "message": "Context Window (tokens)"
+  },
+  "model_contextWindowPlaceholder": {
+    "message": "Auto-detect from model ID"
+  },
+  "model_contextWindowHint": {
+    "message": "Override the context window size used for compaction. Leave empty to auto-detect."
+  },
+  "model_downloading": {
+    "message": "Downloading model..."
+  },
+  "model_downloadComplete": {
+    "message": "Download complete"
+  },
+  "model_downloadFailed": {
+    "message": "Download failed"
+  },
+  "model_testConnection": {
+    "message": "Test Connection"
+  },
+  "model_connectionFailed": {
+    "message": "Connection failed"
+  },
+  "model_baseUrlNeeded": {
+    "message": "Base URL needed for connection test"
+  },
+  "model_nameRequired": {
+    "message": "Name is required"
+  },
+  "model_providerRequired": {
+    "message": "Provider is required"
+  },
+  "model_baseUrlInvalid": {
+    "message": "Base URL must start with http:// or https://"
+  },
+  "model_huggingFaceModelId": {
+    "message": "HuggingFace Model ID"
+  },
+  "skill_title": {
+    "message": "Skills"
+  },
+  "skill_description": {
+    "message": "Skills provide task-specific guidance that the LLM can read on-demand via the read tool."
+  },
+  "skill_browserWarning": {
+    "message": "Skills run in the Chrome browser environment — CLI tools, Python scripts, and other local executables are not supported."
+  },
+  "skill_installedSkills": {
+    "message": "Installed Skills"
+  },
+  "skill_importZip": {
+    "message": "Import Zip"
+  },
+  "skill_newSkill": {
+    "message": "New Skill"
+  },
+  "skill_loadingSkills": {
+    "message": "Loading skills…"
+  },
+  "skill_noSkills": {
+    "message": "No skills installed"
+  },
+  "skill_deleted": {
+    "message": "Skill deleted"
+  },
+  "skill_importExists": {
+    "message": "A skill already exists at $PATH$. Delete it first or rename the import.",
+    "placeholders": {
+      "path": {
+        "content": "$1"
+      }
+    }
+  },
+  "skill_importedSkill": {
+    "message": "Imported skill: $SKILL_NAME$",
+    "placeholders": {
+      "skill_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "skill_importFailed": {
+    "message": "Failed to import skill"
+  },
+  "skill_deleteConfirm": {
+    "message": "Delete skill \"$SKILL_NAME$\"? This cannot be undone.",
+    "placeholders": {
+      "skill_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "sessionMgr_title": {
+    "message": "Sessions"
+  },
+  "sessionMgr_searchPlaceholder": {
+    "message": "Search sessions..."
+  },
+  "sessionMgr_noMatching": {
+    "message": "No matching sessions."
+  },
+  "sessionMgr_noSessions": {
+    "message": "No sessions yet."
+  },
+  "sessionMgr_clickToSelect": {
+    "message": "Click to select, double-click to open"
+  },
+  "sessionMgr_clickToSelectSidePanel": {
+    "message": "Click to select, double-click to open in side panel"
+  },
+  "telegram_title": {
+    "message": "Telegram Bot"
+  },
+  "telegram_description": {
+    "message": "Connect a Telegram bot so you can chat with your AI assistant from Telegram."
+  },
+  "telegram_enableBot": {
+    "message": "Enable Telegram Bot"
+  },
+  "telegram_botToken": {
+    "message": "Bot Token"
+  },
+  "telegram_validate": {
+    "message": "Validate"
+  },
+  "telegram_tokenValid": {
+    "message": "Token valid"
+  },
+  "telegram_invalidToken": {
+    "message": "Invalid token"
+  },
+  "telegram_allowedUserIds": {
+    "message": "Allowed User IDs"
+  },
+  "telegram_userIdsHint": {
+    "message": "Only messages from these Telegram user IDs will be processed. Get your ID from @userinfobot. Must be numeric."
+  },
+  "telegram_noUsers": {
+    "message": "No users allowed yet. Add at least one user ID to start receiving messages."
+  },
+  "telegram_loadFailed": {
+    "message": "Failed to load config"
+  },
+  "telegram_validationFailed": {
+    "message": "Validation failed"
+  },
+  "telegram_saveFailed": {
+    "message": "Save failed"
+  },
+  "telegram_toggleFailed": {
+    "message": "Toggle failed"
+  },
+  "agents_newAgent": {
+    "message": "New Agent"
+  },
+  "agents_mainAgent": {
+    "message": "Main Agent"
+  },
+  "agents_deleteAgent": {
+    "message": "Delete agent"
+  },
+  "agents_deleteAgentConfirm": {
+    "message": "Delete this agent and all its data? This cannot be undone."
+  },
+  "agents_overview": {
+    "message": "Overview"
+  },
+  "agents_files": {
+    "message": "Files"
+  },
+  "agents_tools": {
+    "message": "Tools"
+  },
+  "agents_skills": {
+    "message": "Skills"
+  },
+  "agents_workspaceFiles": {
+    "message": "Workspace Files"
+  },
+  "agents_agentCreated": {
+    "message": "Agent created"
+  },
+  "agents_agentDeleted": {
+    "message": "Agent deleted"
+  },
+  "agents_deleteAgentFailed": {
+    "message": "Failed to delete agent"
+  },
+  "agents_fileDeleted": {
+    "message": "File deleted"
+  },
+  "agents_fileUploaded": {
+    "message": "File uploaded"
+  },
+  "agents_fileRenamed": {
+    "message": "File renamed"
+  },
+  "agents_cannotRenamePredefined": {
+    "message": "Cannot rename folder containing predefined files"
+  },
+  "agents_cannotDeletePredefined": {
+    "message": "Cannot delete folder containing predefined files"
+  },
+  "agents_folderRenamed": {
+    "message": "Folder renamed"
+  },
+  "agents_folderDeleted": {
+    "message": "Folder deleted"
+  },
+  "agents_folderEmpty": {
+    "message": "Folder is empty"
+  },
+  "agents_fileSaved": {
+    "message": "File saved"
+  },
+  "agents_identity": {
+    "message": "Identity"
+  },
+  "agents_identityHint": {
+    "message": "Edit these values in the IDENTITY.md file under the Files tab."
+  },
+  "agents_notSet": {
+    "message": "(not set)"
+  },
+  "agents_justNow": {
+    "message": "just now"
+  },
+  "agents_minutesAgo": {
+    "message": "$MINUTES$m ago",
+    "placeholders": {
+      "minutes": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_hoursAgo": {
+    "message": "$HOURS$h ago",
+    "placeholders": {
+      "hours": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_daysAgo": {
+    "message": "$DAYS$d ago",
+    "placeholders": {
+      "days": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_monthsAgo": {
+    "message": "$MONTHS$mo ago",
+    "placeholders": {
+      "months": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_deleteFile": {
+    "message": "Delete file"
+  },
+  "agents_deleteFileConfirm": {
+    "message": "Delete \"$FILE_NAME$\"? This cannot be undone.",
+    "placeholders": {
+      "file_name": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_deleteFolder": {
+    "message": "Delete folder"
+  },
+  "agents_deleteFolderConfirm": {
+    "message": "Delete folder \"$FOLDER_NAME$\" and all $FILE_COUNT$ file(s) inside? This cannot be undone.",
+    "placeholders": {
+      "folder_name": {
+        "content": "$1"
+      },
+      "file_count": {
+        "content": "$2"
+      }
+    }
+  },
+  "agents_renameFile": {
+    "message": "Rename file"
+  },
+  "agents_renameFolder": {
+    "message": "Rename folder"
+  },
+  "agents_newFile": {
+    "message": "New File"
+  },
+  "agents_newFolder": {
+    "message": "New Folder"
+  },
+  "agents_newFolderName": {
+    "message": "New folder name"
+  },
+  "agents_upload": {
+    "message": "Upload"
+  },
+  "agents_edit": {
+    "message": "Edit"
+  },
+  "agents_download": {
+    "message": "Download"
+  },
+  "agents_downloadFolderZip": {
+    "message": "Download Folder as ZIP"
+  },
+  "agents_refresh": {
+    "message": "Refresh"
+  },
+  "agents_importZip": {
+    "message": "Import ZIP"
+  },
+  "optionsPage_title": {
+    "message": "ChromeClaw Settings"
+  },
+  "provider_openai": {
+    "message": "OpenAI"
+  },
+  "provider_anthropic": {
+    "message": "Anthropic"
+  },
+  "provider_google": {
+    "message": "Google"
+  },
+  "provider_openrouter": {
+    "message": "OpenRouter"
+  },
+  "provider_openaiCompatible": {
+    "message": "OpenAI Compatible"
+  },
+  "provider_webgpu": {
+    "message": "WebGPU (On-Device)"
+  },
+  "time_mAgo": {
+    "message": "$MINUTES$m ago",
+    "placeholders": {
+      "minutes": {
+        "content": "$1"
+      }
+    }
+  },
+  "time_hAgo": {
+    "message": "$HOURS$h ago",
+    "placeholders": {
+      "hours": {
+        "content": "$1"
+      }
+    }
+  },
+  "time_dAgo": {
+    "message": "$DAYS$d ago",
+    "placeholders": {
+      "days": {
+        "content": "$1"
+      }
+    }
+  },
+  "tabGroup_control": {
+    "message": "Control"
+  },
+  "tabGroup_agent": {
+    "message": "Agent"
+  },
+  "tabGroup_settings": {
+    "message": "Settings"
+  },
+  "tab_channels": {
+    "message": "Channels"
+  },
+  "tab_cronJobs": {
+    "message": "Cron Jobs"
+  },
+  "tab_sessions": {
+    "message": "Sessions"
+  },
+  "tab_usage": {
+    "message": "Usage"
+  },
+  "tab_agents": {
+    "message": "Agents"
+  },
+  "tab_tools": {
+    "message": "Tools"
+  },
+  "tab_skills": {
+    "message": "Skills"
+  },
+  "tab_general": {
+    "message": "General"
+  },
+  "tab_models": {
+    "message": "Models"
+  },
+  "tab_actions": {
+    "message": "Actions"
+  },
+  "tab_logs": {
+    "message": "Logs"
+  },
+  "whatsapp_title": {
+    "message": "WhatsApp"
+  },
+  "whatsapp_description": {
+    "message": "Connect WhatsApp to chat with your AI assistant from your phone. Uses WhatsApp Web protocol — no external server needed."
+  },
+  "whatsapp_connection": {
+    "message": "Connection"
+  },
+  "whatsapp_connect": {
+    "message": "Connect"
+  },
+  "whatsapp_disconnect": {
+    "message": "Disconnect"
+  },
+  "whatsapp_disconnected": {
+    "message": "Disconnected"
+  },
+  "whatsapp_connecting": {
+    "message": "Waiting for QR scan..."
+  },
+  "whatsapp_connected": {
+    "message": "Connected"
+  },
+  "whatsapp_reconnecting": {
+    "message": "Reconnecting..."
+  },
+  "whatsapp_loggedOut": {
+    "message": "Logged out"
+  },
+  "whatsapp_scanQr": {
+    "message": "Scan with WhatsApp"
+  },
+  "whatsapp_scanInstructions": {
+    "message": "Open WhatsApp on your phone → Settings → Linked Devices → Link a Device"
+  },
+  "whatsapp_connectedMsg": {
+    "message": "WhatsApp connected and receiving messages"
+  },
+  "whatsapp_reconnectingMsg": {
+    "message": "Reconnecting to WhatsApp..."
+  },
+  "whatsapp_allowedNumbers": {
+    "message": "Allowed Phone Numbers"
+  },
+  "whatsapp_numbersHint": {
+    "message": "Only messages from these phone numbers will be processed. Enter numbers with country code (e.g. +1234567890)."
+  },
+  "whatsapp_noNumbers": {
+    "message": "No numbers allowed yet. Add at least one phone number to start receiving messages."
+  },
+  "whatsapp_messageDirection": {
+    "message": "Message Direction"
+  },
+  "whatsapp_directionHint": {
+    "message": "Control which messages are processed by the AI assistant."
+  },
+  "whatsapp_processMyMessages": {
+    "message": "Process my own messages"
+  },
+  "whatsapp_processOthers": {
+    "message": "Process messages from others"
+  },
+  "whatsapp_connectionFailed": {
+    "message": "Connection failed"
+  },
+  "whatsapp_disconnectFailed": {
+    "message": "Disconnect failed"
+  },
+  "whatsapp_saveFailed": {
+    "message": "Save failed"
+  },
+  "whatsapp_loadFailed": {
+    "message": "Failed to load config"
+  },
+  "cron_title": {
+    "message": "Cron Jobs"
+  },
+  "cron_description": {
+    "message": "Manage automated tasks created by the AI agent"
+  },
+  "cron_active": {
+    "message": "Active"
+  },
+  "cron_stopped": {
+    "message": "Stopped"
+  },
+  "cron_noJobs": {
+    "message": "No cron jobs yet. Ask the AI to schedule a task for you."
+  },
+  "cron_runHistory": {
+    "message": "Run History"
+  },
+  "cron_noRuns": {
+    "message": "No runs yet"
+  },
+  "cron_next": {
+    "message": "Next: $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_last": {
+    "message": "Last: $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_duration": {
+    "message": "Duration: $DURATION$",
+    "placeholders": {
+      "duration": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_onceAt": {
+    "message": "Once at $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "cron_every": {
+    "message": "Every $INTERVAL$",
+    "placeholders": {
+      "interval": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_title": {
+    "message": "Usage"
+  },
+  "usage_description": {
+    "message": "Token usage across all sessions"
+  },
+  "usage_sessions": {
+    "message": "Sessions"
+  },
+  "usage_totalTokens": {
+    "message": "Total Tokens"
+  },
+  "usage_input": {
+    "message": "Input"
+  },
+  "usage_output": {
+    "message": "Output"
+  },
+  "usage_average": {
+    "message": "Average: $COUNT$ tokens/session",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_sessionsByUsage": {
+    "message": "Sessions by usage"
+  },
+  "usage_compacted": {
+    "message": "$COUNT$x compacted",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "usage_moreSessionsCount": {
+    "message": "...and $COUNT$ more sessions",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_title": {
+    "message": "Suggested Actions"
+  },
+  "actions_description": {
+    "message": "Customize the starter prompts shown on the empty chat screen (max $MAX$)",
+    "placeholders": {
+      "max": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_heading": {
+    "message": "Actions"
+  },
+  "actions_resetDefaults": {
+    "message": "Reset to Defaults"
+  },
+  "actions_addAction": {
+    "message": "Add Action"
+  },
+  "actions_noActions": {
+    "message": "No suggested actions configured. Add one or reset to defaults."
+  },
+  "actions_actionNumber": {
+    "message": "Action $NUMBER$",
+    "placeholders": {
+      "number": {
+        "content": "$1"
+      }
+    }
+  },
+  "actions_moveUp": {
+    "message": "Move up"
+  },
+  "actions_moveDown": {
+    "message": "Move down"
+  },
+  "actions_remove": {
+    "message": "Remove"
+  },
+  "actions_labelPlaceholder": {
+    "message": "Button label (shown on chat screen)"
+  },
+  "actions_promptPlaceholder": {
+    "message": "Full prompt sent to the AI when clicked"
+  },
+  "tool_title": {
+    "message": "Tool Configuration"
+  },
+  "tool_description": {
+    "message": "Enable or disable AI tools"
+  },
+  "tool_searchProvider": {
+    "message": "Search Provider"
+  },
+  "tool_selectProvider": {
+    "message": "Select provider"
+  },
+  "tool_apiKey": {
+    "message": "API Key"
+  },
+  "tool_searchEngine": {
+    "message": "Search Engine"
+  },
+  "tool_selectEngine": {
+    "message": "Select engine"
+  },
+  "tool_noApiKey": {
+    "message": "No API key needed — uses browser automation"
+  },
+  "tool_subTopics": {
+    "message": "Sub-topics"
+  },
+  "tool_iterationsPerTopic": {
+    "message": "Iterations per topic"
+  },
+  "tool_sourcesPerSearch": {
+    "message": "Sources per search"
+  },
+  "tool_timeout": {
+    "message": "Timeout (seconds)"
+  },
+  "tool_clientId": {
+    "message": "Client ID"
+  },
+  "tool_connectGoogle": {
+    "message": "Connect Google Account"
+  },
+  "tool_connecting": {
+    "message": "Connecting..."
+  },
+  "tool_connectedAs": {
+    "message": "Connected as"
+  },
+  "tool_disconnect": {
+    "message": "Disconnect"
+  },
+  "tool_failedToConnect": {
+    "message": "Failed to connect"
+  },
+  "tool_googleServices": {
+    "message": "Google Services"
+  },
+  "tool_enableGoogleHint": {
+    "message": "Connect your Google account to enable these tools"
+  },
+  "tab_chat": {
+    "message": "Chat"
+  },
+  "log_title": {
+    "message": "Logs"
+  },
+  "log_description": {
+    "message": "View extension logs for debugging. Logs are stored in memory and cleared on extension restart."
+  },
+  "log_enableLogging": {
+    "message": "Enable logging"
+  },
+  "log_minLevel": {
+    "message": "Min level:"
+  },
+  "log_allLevels": {
+    "message": "All levels"
+  },
+  "log_allCategories": {
+    "message": "All categories"
+  },
+  "log_searchPlaceholder": {
+    "message": "Search messages..."
+  },
+  "log_live": {
+    "message": "Live"
+  },
+  "log_stop": {
+    "message": "Stop"
+  },
+  "log_clear": {
+    "message": "Clear"
+  },
+  "log_noEntries": {
+    "message": "No log entries"
+  },
+  "log_noMatch": {
+    "message": "No entries match filters"
+  },
+  "log_copyEntry": {
+    "message": "Copy entry"
+  },
+  "log_exportText": {
+    "message": "Export Text"
+  },
+  "log_exportJson": {
+    "message": "Export JSON"
+  },
+  "log_copyAll": {
+    "message": "Copy All"
+  },
+  "log_copiedCount": {
+    "message": "Copied $COUNT$ entries to clipboard",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "log_entriesCount": {
+    "message": "$COUNT$ entries",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "log_droppedCount": {
+    "message": "$COUNT$ dropped",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "agents_title": {
+    "message": "Agents"
+  }
+}

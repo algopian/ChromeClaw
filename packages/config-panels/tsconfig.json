@@ -1,0 +1,9 @@
+{
+  "extends": "@extension/tsconfig/module",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist"
+  },
+  "include": ["index.ts", "lib"],
+  "exclude": ["lib/**/*.test.ts"]
+}

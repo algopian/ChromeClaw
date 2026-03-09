@@ -1,0 +1,999 @@
+import { cdpSend } from './cdp';
+import { sanitizeImage } from './image-sanitization';
+import { Type } from '@sinclair/typebox';
+import type { SanitizedImage } from './image-sanitization';
+import type { Static } from '@sinclair/typebox';
+
+// ---------------------------------------------------------------------------
+// Schema
+// ---------------------------------------------------------------------------
+
+const browserSchema = Type.Object({
+  action: Type.Union(
+    [
+      Type.Literal('tabs'),
+      Type.Literal('open'),
+      Type.Literal('close'),
+      Type.Literal('focus'),
+      Type.Literal('navigate'),
+      Type.Literal('content'),
+      Type.Literal('snapshot'),
+      Type.Literal('screenshot'),
+      Type.Literal('click'),
+      Type.Literal('type'),
+      Type.Literal('evaluate'),
+      Type.Literal('console'),
+      Type.Literal('network'),
+    ],
+    {
+      description:
+        'The browser action to perform. Use "snapshot" to understand page content, then "click"/"type" with ref numbers to interact.',
+    },
+  ),
+  tabId: Type.Optional(
+    Type.Number({
+      description: 'Target tab ID (required for most actions except "tabs" and "open")',
+    }),
+  ),
+  url: Type.Optional(Type.String({ description: 'URL for "open" or "navigate" actions' })),
+  active: Type.Optional(
+    Type.Boolean({
+      description: 'Whether to activate the tab for "open" or "navigate" (default: false)',
+    }),
+  ),
+  ref: Type.Optional(
+    Type.Number({ description: 'Element ref number from a snapshot, for "click" or "type"' }),
+  ),
+  text: Type.Optional(
+    Type.String({ description: 'Text to type for the "type" action (replaces existing value)' }),
+  ),
+  selector: Type.Optional(
+    Type.String({ description: 'CSS selector to scope "content" extraction' }),
+  ),
+  expression: Type.Optional(Type.String({ description: 'JavaScript expression for "evaluate"' })),
+  fullPage: Type.Optional(
+    Type.Boolean({ description: 'Capture full page for "screenshot" (default: viewport only)' }),
+  ),
+  limit: Type.Optional(
+    Type.Number({ description: 'Max entries for "console" or "network" (default: 50)' }),
+  ),
+});
+
+type BrowserArgs = Static<typeof browserSchema>;
+
+/** Structured result returned by the screenshot action */
+interface ScreenshotResult {
+  __type: 'screenshot';
+  base64: string;
+  mimeType: string;
+  width: number;
+  height: number;
+}
+
+// ---------------------------------------------------------------------------
+// Session management
+// ---------------------------------------------------------------------------
+
+interface RefEntry {
+  nodeId: number;
+  backendNodeId: number;
+}
+
+interface TabSession {
+  attached: boolean;
+  refMap: Map<number, RefEntry>;
+  consoleLogs: ConsoleEntry[];
+  networkRequests: NetworkEntry[];
+}
+
+interface ConsoleEntry {
+  type: string;
+  text: string;
+  timestamp: number;
+}
+
+interface NetworkEntry {
+  method: string;
+  url: string;
+  status?: number;
+  type?: string;
+  timestamp: number;
+}
+
+const MAX_BUFFER = 200;
+
+const sessions = new Map<number, TabSession>();
+
+const getOrCreateSession = (tabId: number): TabSession => {
+  let session = sessions.get(tabId);
+  if (!session) {
+    session = {
+      attached: false,
+      refMap: new Map(),
+      consoleLogs: [],
+      networkRequests: [],
+    };
+    sessions.set(tabId, session);
+  }
+  return session;
+};
+
+const cleanupSession = (tabId: number): void => {
+  sessions.delete(tabId);
+};
+
+const pushToRingBuffer = <T>(buffer: T[], item: T): void => {
+  buffer.push(item);
+  if (buffer.length > MAX_BUFFER) {
+    buffer.shift();
+  }
+};
+
+// Per-tab attach promises to serialize concurrent ensureAttached calls
+const attachPromises = new Map<number, Promise<string | null>>();
+
+const doAttach = async (tabId: number): Promise<string | null> => {
+  const session = getOrCreateSession(tabId);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      chrome.debugger.attach({ tabId }, '1.3', () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Another debugger is already attached')) {
+      session.attached = true;
+      return null;
+    }
+    return `Cannot attach debugger to this tab: ${msg}`;
+  }
+
+  session.attached = true;
+
+  // Enable domains
+  await cdpSend(tabId, 'Runtime.enable');
+  await cdpSend(tabId, 'Network.enable');
+  await cdpSend(tabId, 'Page.enable');
+  await cdpSend(tabId, 'DOM.enable');
+
+  return null;
+};
+
+const ensureAttached = async (tabId: number): Promise<string | null> => {
+  const session = getOrCreateSession(tabId);
+  if (session.attached) return null;
+
+  // Serialize concurrent attach attempts for the same tab
+  const pending = attachPromises.get(tabId);
+  if (pending) return pending;
+
+  const promise = doAttach(tabId);
+  attachPromises.set(tabId, promise);
+  try {
+    return await promise;
+  } finally {
+    attachPromises.delete(tabId);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Debugger event listeners (registered once at module load)
+// ---------------------------------------------------------------------------
+
+chrome.debugger.onDetach.addListener((source, _reason) => {
+  if (source.tabId != null) {
+    cleanupSession(source.tabId);
+  }
+});
+
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  if (source.tabId == null) return;
+  const session = sessions.get(source.tabId);
+  if (!session) return;
+
+  const p = params as Record<string, unknown>;
+
+  if (method === 'Runtime.consoleAPICalled') {
+    const args = (p.args as Array<{ type: string; value?: unknown; description?: string }>) ?? [];
+    const text = args.map(a => a.description ?? a.value ?? '').join(' ');
+    pushToRingBuffer(session.consoleLogs, {
+      type: (p.type as string) ?? 'log',
+      text,
+      timestamp: Date.now(),
+    });
+  }
+
+  if (method === 'Network.requestWillBeSent') {
+    const request = p.request as { method?: string; url?: string } | undefined;
+    if (request) {
+      pushToRingBuffer(session.networkRequests, {
+        method: request.method ?? 'GET',
+        url: request.url ?? '',
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  if (method === 'Network.responseReceived') {
+    const response = p.response as { url?: string; status?: number; mimeType?: string } | undefined;
+    if (response) {
+      // Update the last matching request with status
+      for (let i = session.networkRequests.length - 1; i >= 0; i--) {
+        if (
+          session.networkRequests[i].url === response.url &&
+          session.networkRequests[i].status == null
+        ) {
+          session.networkRequests[i].status = response.status;
+          session.networkRequests[i].type = response.mimeType;
+          break;
+        }
+      }
+    }
+  }
+});
+
+// Cleanup session when tab is closed
+chrome.tabs.onRemoved.addListener(tabId => {
+  if (sessions.has(tabId)) {
+    try {
+      chrome.debugger.detach({ tabId }, () => {
+        // Ignore errors — tab is already gone
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // ignore
+    }
+    cleanupSession(tabId);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Wait helpers
+// ---------------------------------------------------------------------------
+
+const waitForLoad = (tabId: number, timeoutMs = 15000): Promise<void> =>
+  new Promise((_resolve, reject) => {
+    const resolve = _resolve;
+    const timer = setTimeout(() => {
+      chrome.debugger.onEvent.removeListener(listener);
+      reject(new Error('Page load timed out'));
+    }, timeoutMs);
+
+    const listener = (source: chrome.debugger.Debuggee, method: string) => {
+      if (source.tabId === tabId && method === 'Page.loadEventFired') {
+        clearTimeout(timer);
+        chrome.debugger.onEvent.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.debugger.onEvent.addListener(listener);
+  });
+
+// ---------------------------------------------------------------------------
+// Snapshot algorithm
+// ---------------------------------------------------------------------------
+
+const INTERACTIVE_TAGS = new Set([
+  'a',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'details',
+  'summary',
+]);
+
+const INTERACTIVE_ROLES = new Set([
+  'button',
+  'link',
+  'checkbox',
+  'radio',
+  'tab',
+  'menuitem',
+  'switch',
+  'combobox',
+  'searchbox',
+  'slider',
+  'spinbutton',
+  'textbox',
+  'option',
+]);
+
+const SKIP_TAGS = new Set([
+  'script',
+  'style',
+  'noscript',
+  'svg',
+  'meta',
+  'link',
+  'path',
+  'defs',
+  'clippath',
+]);
+
+const STRUCTURAL_TAGS = new Set([
+  'div',
+  'span',
+  'section',
+  'nav',
+  'main',
+  'aside',
+  'header',
+  'footer',
+  'article',
+  'form',
+  'fieldset',
+  'legend',
+  'ul',
+  'ol',
+  'li',
+  'dl',
+  'dt',
+  'dd',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'blockquote',
+  'pre',
+  'code',
+  'label',
+  'dialog',
+  'img',
+  'video',
+  'audio',
+  'canvas',
+  'iframe',
+]);
+
+const MAX_TEXT_LENGTH = 80;
+const MAX_DEPTH = 15;
+const MAX_NODES = 5000;
+
+interface CDPNode {
+  nodeId: number;
+  backendNodeId: number;
+  nodeType: number;
+  nodeName: string;
+  nodeValue?: string;
+  children?: CDPNode[];
+  attributes?: string[];
+  contentDocument?: CDPNode;
+  frameId?: string;
+}
+
+interface SnapshotContext {
+  refCounter: number;
+  nodeCount: number;
+  refMap: Map<number, RefEntry>;
+  lines: string[];
+}
+
+const getAttr = (node: CDPNode, name: string): string | undefined => {
+  if (!node.attributes) return undefined;
+  for (let i = 0; i < node.attributes.length; i += 2) {
+    if (node.attributes[i] === name) return node.attributes[i + 1];
+  }
+  return undefined;
+};
+
+const isInteractive = (node: CDPNode): boolean => {
+  const tag = node.nodeName.toLowerCase();
+  if (INTERACTIVE_TAGS.has(tag)) return true;
+  const role = getAttr(node, 'role');
+  if (role && INTERACTIVE_ROLES.has(role)) return true;
+  if (getAttr(node, 'onclick') != null) return true;
+  if (getAttr(node, 'contenteditable') === 'true') return true;
+  if (getAttr(node, 'tabindex') != null && tag !== 'div' && tag !== 'span') return true;
+  return false;
+};
+
+const truncateText = (text: string): string => {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= MAX_TEXT_LENGTH) return trimmed;
+  return trimmed.slice(0, MAX_TEXT_LENGTH) + '...';
+};
+
+const collectTextContent = (node: CDPNode): string => {
+  if (node.nodeType === 3) return node.nodeValue ?? '';
+  let text = '';
+  for (const child of node.children ?? []) {
+    if (child.nodeType === 3) {
+      text += child.nodeValue ?? '';
+    }
+  }
+  return text;
+};
+
+const formatInteractiveNode = (node: CDPNode, ref: number): string => {
+  const tag = node.nodeName.toLowerCase();
+  const parts: string[] = [`[${ref}]`];
+
+  // Determine display type
+  if (tag === 'a') {
+    parts.push('link');
+  } else if (tag === 'button' || getAttr(node, 'role') === 'button') {
+    parts.push('button');
+  } else if (tag === 'input') {
+    const type = getAttr(node, 'type') ?? 'text';
+    parts.push(`input type=${type}`);
+  } else if (tag === 'select') {
+    parts.push('select');
+  } else if (tag === 'textarea') {
+    parts.push('textarea');
+  } else {
+    const role = getAttr(node, 'role');
+    parts.push(role ?? tag);
+  }
+
+  // Label text
+  const text = truncateText(collectTextContent(node));
+  if (text) parts.push(`"${text}"`);
+
+  // Key attributes
+  const ariaLabel = getAttr(node, 'aria-label');
+  if (ariaLabel && !text) parts.push(`"${truncateText(ariaLabel)}"`);
+
+  const placeholder = getAttr(node, 'placeholder');
+  if (placeholder) parts.push(`placeholder="${truncateText(placeholder)}"`);
+
+  const href = getAttr(node, 'href');
+  if (href) parts.push(`href=${href.length > 60 ? href.slice(0, 60) + '...' : href}`);
+
+  const value = getAttr(node, 'value');
+  if (value && tag === 'input') parts.push(`value="${truncateText(value)}"`);
+
+  const name = getAttr(node, 'name');
+  if (name) parts.push(`name="${name}"`);
+
+  if (getAttr(node, 'disabled') != null) parts.push('disabled');
+  if (getAttr(node, 'readonly') != null) parts.push('readonly');
+  if (getAttr(node, 'required') != null) parts.push('required');
+
+  return parts.join(' ');
+};
+
+const walkNode = (node: CDPNode, depth: number, ctx: SnapshotContext): void => {
+  if (ctx.nodeCount >= MAX_NODES) return;
+  if (depth > MAX_DEPTH) return;
+
+  const tag = node.nodeName.toLowerCase();
+
+  // Skip invisible/irrelevant nodes
+  if (SKIP_TAGS.has(tag)) return;
+
+  const indent = '  '.repeat(depth);
+  ctx.nodeCount++;
+
+  // Text node
+  if (node.nodeType === 3) {
+    const text = truncateText(node.nodeValue ?? '');
+    if (text) {
+      ctx.lines.push(`${indent}${text}`);
+    }
+    return;
+  }
+
+  // Element node
+  if (node.nodeType === 1) {
+    // Handle iframes specially
+    if (tag === 'iframe') {
+      const src = getAttr(node, 'src') ?? '';
+      ctx.lines.push(`${indent}[iframe] src=${src}`);
+      // Walk contentDocument if same-origin
+      if (node.contentDocument) {
+        walkNode(node.contentDocument, depth + 1, ctx);
+      }
+      return;
+    }
+
+    if (isInteractive(node)) {
+      const ref = ++ctx.refCounter;
+      ctx.refMap.set(ref, { nodeId: node.nodeId, backendNodeId: node.backendNodeId });
+      ctx.lines.push(`${indent}${formatInteractiveNode(node, ref)}`);
+      // Walk children for nested interactive elements
+      for (const child of node.children ?? []) {
+        if (child.nodeType === 1 && isInteractive(child)) {
+          walkNode(child, depth + 1, ctx);
+        }
+      }
+      return;
+    }
+
+    if (STRUCTURAL_TAGS.has(tag)) {
+      // Only emit structural tag if it has content
+      const childLines: string[] = [];
+      const childCtx: SnapshotContext = {
+        ...ctx,
+        lines: childLines,
+      };
+      for (const child of node.children ?? []) {
+        walkNode(child, depth + 1, childCtx);
+      }
+      // Update shared counters
+      ctx.refCounter = childCtx.refCounter;
+      ctx.nodeCount = childCtx.nodeCount;
+
+      if (childLines.length > 0) {
+        ctx.lines.push(`${indent}[${tag}]`);
+        ctx.lines.push(...childLines);
+      }
+      return;
+    }
+
+    // Other element — just walk children
+    for (const child of node.children ?? []) {
+      walkNode(child, depth, ctx);
+    }
+  }
+
+  // Document node (nodeType 9)
+  if (node.nodeType === 9) {
+    for (const child of node.children ?? []) {
+      walkNode(child, depth, ctx);
+    }
+  }
+};
+
+const buildSnapshot = async (tabId: number): Promise<string> => {
+  const session = getOrCreateSession(tabId);
+
+  const { root } = await cdpSend<{ root: CDPNode }>(tabId, 'DOM.getDocument', {
+    depth: -1,
+    pierce: true,
+  });
+
+  // Get page info
+  let title = '';
+  let url = '';
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    title = tab.title ?? '';
+    url = tab.url ?? '';
+  } catch {
+    // ignore
+  }
+
+  const ctx: SnapshotContext = {
+    refCounter: 0,
+    nodeCount: 0,
+    refMap: new Map(),
+    lines: [],
+  };
+
+  ctx.lines.push(`[page] ${title} (${url})`);
+  walkNode(root, 1, ctx);
+
+  // Store ref map in session for click/type
+  session.refMap = ctx.refMap;
+
+  if (ctx.nodeCount >= MAX_NODES) {
+    ctx.lines.push(`\n[truncated: reached ${MAX_NODES} node limit]`);
+  }
+
+  return ctx.lines.join('\n');
+};
+
+// ---------------------------------------------------------------------------
+// Action handlers
+// ---------------------------------------------------------------------------
+
+const ensureTabActive = async (tabId: number): Promise<void> => {
+  await chrome.tabs.update(tabId, { active: true });
+};
+
+const handleTabs = async (): Promise<string> => {
+  const tabs = await chrome.tabs.query({});
+  const lines = tabs.map(
+    t => `[${t.id}] ${t.active ? '(active) ' : ''}${t.title ?? 'Untitled'} — ${t.url ?? ''}`,
+  );
+  return `Open tabs (${tabs.length}):\n${lines.join('\n')}`;
+};
+
+const handleOpen = async (args: BrowserArgs): Promise<string> => {
+  if (!args.url) return 'Error: "url" is required for the "open" action.';
+  const tab = await chrome.tabs.create({ url: args.url, active: args.active ?? false });
+  return `Opened tab [${tab.id}]: ${tab.url ?? args.url}`;
+};
+
+const handleFocus = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "focus" action.';
+  const tab = await chrome.tabs.update(args.tabId, { active: true });
+  if (tab?.windowId) {
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
+  return `Focused tab [${args.tabId}]: ${tab?.title ?? ''}`;
+};
+
+const handleClose = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "close" action.';
+  // Detach debugger if attached
+  const session = sessions.get(args.tabId);
+  if (session?.attached) {
+    try {
+      await new Promise<void>(resolve => {
+        chrome.debugger.detach({ tabId: args.tabId! }, () => {
+          void chrome.runtime.lastError;
+          resolve();
+        });
+      });
+    } catch {
+      // ignore
+    }
+  }
+  cleanupSession(args.tabId);
+  await chrome.tabs.remove(args.tabId);
+  return `Closed tab [${args.tabId}].`;
+};
+
+const handleNavigate = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "navigate" action.';
+  if (!args.url) return 'Error: "url" is required for the "navigate" action.';
+
+  if (args.active) {
+    await ensureTabActive(args.tabId);
+  }
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  // Clear stale refs before navigation — even if load times out, old refs are invalid
+  const navSession = getOrCreateSession(args.tabId);
+  navSession.refMap.clear();
+
+  const loadPromise = waitForLoad(args.tabId);
+  const navResult = await cdpSend<{ frameId?: string; errorText?: string }>(
+    args.tabId,
+    'Page.navigate',
+    { url: args.url },
+  );
+
+  // Check for navigation-level errors (e.g., invalid URL, DNS failure)
+  if (navResult.errorText) {
+    return `Error: Navigation failed — ${navResult.errorText}`;
+  }
+
+  await loadPromise;
+
+  const tab = await chrome.tabs.get(args.tabId);
+  return `Navigated tab [${args.tabId}] to ${tab.url ?? args.url}. Run "snapshot" to see page content.`;
+};
+
+const handleContent = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "content" action.';
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: args.tabId },
+    func: (selector?: string) => {
+      if (selector) {
+        const el = document.querySelector(selector);
+        return el ? (el as HTMLElement).innerText : `No element found for selector: ${selector}`;
+      }
+      return document.body.innerText;
+    },
+    args: [args.selector ?? undefined],
+  });
+
+  let text = results?.[0]?.result ?? '';
+  if (typeof text === 'string' && text.length > 50000) {
+    text = text.slice(0, 50000) + '\n[truncated at 50,000 characters]';
+  }
+  return text;
+};
+
+const handleSnapshot = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "snapshot" action.';
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  return buildSnapshot(args.tabId);
+};
+
+const handleScreenshot = async (args: BrowserArgs): Promise<string | ScreenshotResult> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "screenshot" action.';
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  const params: Record<string, unknown> = { format: 'png' };
+
+  if (args.fullPage) {
+    // Get full page metrics
+    const metrics = await cdpSend<{
+      contentSize: { width: number; height: number };
+    }>(args.tabId, 'Page.getLayoutMetrics');
+    const { width, height } = metrics.contentSize;
+
+    await cdpSend(args.tabId, 'Emulation.setDeviceMetricsOverride', {
+      width: Math.ceil(width),
+      height: Math.ceil(height),
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+
+    params.captureBeyondViewport = true;
+  }
+
+  try {
+    const result = await cdpSend<{ data: string }>(args.tabId, 'Page.captureScreenshot', params);
+
+    // Resize and compress the screenshot
+    let sanitized: SanitizedImage | null;
+    try {
+      sanitized = await sanitizeImage(result.data, 'image/png');
+    } catch {
+      // Fallback: return raw PNG if sanitization fails (e.g. OffscreenCanvas unavailable)
+      return JSON.stringify({ base64: result.data, mimeType: 'image/png' });
+    }
+    if (!sanitized) {
+      return JSON.stringify({ base64: result.data, mimeType: 'image/png' });
+    }
+
+    return {
+      __type: 'screenshot',
+      base64: sanitized.base64,
+      mimeType: sanitized.mimeType,
+      width: sanitized.width,
+      height: sanitized.height,
+    };
+  } finally {
+    if (args.fullPage) {
+      await cdpSend(args.tabId, 'Emulation.clearDeviceMetricsOverride');
+    }
+  }
+};
+
+const handleClick = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "click" action.';
+  if (args.ref == null) return 'Error: "ref" is required for the "click" action.';
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  const session = getOrCreateSession(args.tabId);
+  const entry = session.refMap.get(args.ref);
+  if (!entry) return `Error: Ref [${args.ref}] not found. Run "snapshot" to refresh refs.`;
+
+  try {
+    // Resolve backend node to a remote object
+    const { object } = await cdpSend<{ object: { objectId: string } }>(
+      args.tabId,
+      'DOM.resolveNode',
+      { backendNodeId: entry.backendNodeId },
+    );
+
+    // Scroll into view and click
+    await cdpSend(args.tabId, 'Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `function() {
+        this.scrollIntoView({ block: 'center', behavior: 'instant' });
+        this.click();
+      }`,
+      awaitPromise: false,
+    });
+
+    return `Clicked element [${args.ref}].`;
+  } catch (err: unknown) {
+    // Fallback: try coordinate-based click via box model
+    try {
+      const { model } = await cdpSend<{
+        model: { content: number[] };
+      }>(args.tabId, 'DOM.getBoxModel', { backendNodeId: entry.backendNodeId });
+
+      const [x1, y1, x2, , , , _x4, y4] = model.content;
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y4) / 2;
+
+      await ensureTabActive(args.tabId);
+      await cdpSend(args.tabId, 'Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: cx,
+        y: cy,
+        button: 'left',
+        clickCount: 1,
+      });
+      await cdpSend(args.tabId, 'Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: cx,
+        y: cy,
+        button: 'left',
+        clickCount: 1,
+      });
+
+      return `Clicked element [${args.ref}] (via coordinates).`;
+    } catch {
+      const msg = err instanceof Error ? err.message : String(err);
+      return `Error clicking element [${args.ref}]: ${msg}`;
+    }
+  }
+};
+
+const handleType = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "type" action.';
+  if (args.ref == null) return 'Error: "ref" is required for the "type" action.';
+  if (!args.text) return 'Error: "text" is required for the "type" action.';
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  const session = getOrCreateSession(args.tabId);
+  const entry = session.refMap.get(args.ref);
+  if (!entry) return `Error: Ref [${args.ref}] not found. Run "snapshot" to refresh refs.`;
+
+  try {
+    const { object } = await cdpSend<{ object: { objectId: string } }>(
+      args.tabId,
+      'DOM.resolveNode',
+      { backendNodeId: entry.backendNodeId },
+    );
+
+    // Focus the element and clear existing value, dispatching input event for framework compat
+    await cdpSend(args.tabId, 'Runtime.callFunctionOn', {
+      objectId: object.objectId,
+      functionDeclaration: `function() {
+        this.focus();
+        if ('value' in this) {
+          this.value = '';
+          this.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }`,
+      awaitPromise: false,
+    });
+
+    // Insert text — tab must be active for Input.insertText to work
+    await ensureTabActive(args.tabId);
+    await cdpSend(args.tabId, 'Input.insertText', { text: args.text });
+
+    return `Typed "${args.text.length > 50 ? args.text.slice(0, 50) + '...' : args.text}" into element [${args.ref}].`;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Error typing into element [${args.ref}]: ${msg}`;
+  }
+};
+
+const handleEvaluate = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "evaluate" action.';
+  if (!args.expression) return 'Error: "expression" is required for the "evaluate" action.';
+
+  const attachErr = await ensureAttached(args.tabId);
+  if (attachErr) return `Error: ${attachErr}`;
+
+  const result = await cdpSend<{
+    result: { type: string; value?: unknown; description?: string; subtype?: string };
+    exceptionDetails?: { text: string; exception?: { description?: string } };
+  }>(args.tabId, 'Runtime.evaluate', {
+    expression: args.expression,
+    returnByValue: true,
+    awaitPromise: true,
+    timeout: 10000,
+  });
+
+  if (result.exceptionDetails) {
+    const errMsg = result.exceptionDetails.exception?.description ?? result.exceptionDetails.text;
+    return `Error: ${errMsg}`;
+  }
+
+  if (result.result.type === 'undefined') return 'undefined';
+  if (result.result.value !== undefined) {
+    return typeof result.result.value === 'string'
+      ? result.result.value
+      : JSON.stringify(result.result.value);
+  }
+  return result.result.description ?? `[${result.result.type}]`;
+};
+
+const handleConsole = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "console" action.';
+  const session = sessions.get(args.tabId);
+  if (!session) return 'No console data. Debugger may not be attached to this tab.';
+
+  const limit = args.limit ?? 50;
+  const entries = session.consoleLogs.slice(-limit);
+  if (entries.length === 0) return 'No console messages captured.';
+
+  const lines = entries.map(e => `[${e.type}] ${e.text}`);
+  return `Console messages (${entries.length}):\n${lines.join('\n')}`;
+};
+
+const handleNetwork = async (args: BrowserArgs): Promise<string> => {
+  if (args.tabId == null) return 'Error: "tabId" is required for the "network" action.';
+  const session = sessions.get(args.tabId);
+  if (!session) return 'No network data. Debugger may not be attached to this tab.';
+
+  const limit = args.limit ?? 50;
+  const entries = session.networkRequests.slice(-limit);
+  if (entries.length === 0) return 'No network requests captured.';
+
+  const lines = entries.map(e =>
+    `${e.method} ${e.url} ${e.status != null ? `→ ${e.status}` : '(pending)'} ${e.type ?? ''}`.trim(),
+  );
+  return `Network requests (${entries.length}):\n${lines.join('\n')}`;
+};
+
+// ---------------------------------------------------------------------------
+// Main executor
+// ---------------------------------------------------------------------------
+
+const executeBrowser = async (args: BrowserArgs): Promise<string | ScreenshotResult> => {
+  try {
+    switch (args.action) {
+      case 'tabs':
+        return await handleTabs();
+      case 'open':
+        return await handleOpen(args);
+      case 'focus':
+        return await handleFocus(args);
+      case 'close':
+        return await handleClose(args);
+      case 'navigate':
+        return await handleNavigate(args);
+      case 'content':
+        return await handleContent(args);
+      case 'snapshot':
+        return await handleSnapshot(args);
+      case 'screenshot':
+        return await handleScreenshot(args);
+      case 'click':
+        return await handleClick(args);
+      case 'type':
+        return await handleType(args);
+      case 'evaluate':
+        return await handleEvaluate(args);
+      case 'console':
+        return await handleConsole(args);
+      case 'network':
+        return await handleNetwork(args);
+      default:
+        return `Error: Unknown action "${args.action}".`;
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Error: ${msg}`;
+  }
+};
+
+// Export internals for testing
+export {
+  browserSchema,
+  executeBrowser,
+  // Exported for testing only
+  sessions,
+  getOrCreateSession,
+  cleanupSession,
+  walkNode,
+  buildSnapshot,
+  isInteractive,
+  formatInteractiveNode,
+  truncateText,
+  MAX_BUFFER,
+  MAX_NODES,
+  MAX_DEPTH,
+  MAX_TEXT_LENGTH,
+};
+export type {
+  BrowserArgs,
+  ScreenshotResult,
+  TabSession,
+  CDPNode,
+  SnapshotContext,
+  RefEntry,
+  ConsoleEntry,
+  NetworkEntry,
+};

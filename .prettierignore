@@ -1,0 +1,9 @@
+dist/
+node_modules/
+*.min.js
+*.md
+.github/
+.gitguardian.yaml
+pnpm-lock.yaml
+test-results/
+playwright-report/
