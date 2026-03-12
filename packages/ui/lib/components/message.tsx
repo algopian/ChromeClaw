@@ -243,12 +243,19 @@ const ToolCallPart = ({ part, state, toolName, args, result }: ToolCallPartProps
     <Tool className="w-full" defaultOpen={true}>
       <ToolHeader name={toolName} state={state} />
       <ToolContent>
-        {(state === 'input-available' || state === 'output-available') && (
+        {(state === 'input-available' || state === 'output-available' || state === 'output-error') && (
           <ToolInput input={args} />
         )}
 
         {state === 'output-available' && result != null ? (
           <ToolOutput output={<ToolResultRenderer result={result} toolName={toolName} />} />
+        ) : null}
+
+        {state === 'output-error' && result != null ? (
+          <ToolOutput
+            errorText={typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+            output={null}
+          />
         ) : null}
       </ToolContent>
     </Tool>

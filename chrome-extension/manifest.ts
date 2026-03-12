@@ -92,7 +92,8 @@ const manifest = {
     '128': 'icon-128.png',
   },
   content_security_policy: {
-    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    extension_pages:
+      "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' https: data: blob:",
   },
   web_accessible_resources: [
     {
