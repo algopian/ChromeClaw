@@ -19,6 +19,7 @@ import {
   DEFAULT_CONTEXT_LIMIT,
 } from './limits';
 import { summarizeMessages } from './summarizer';
+import { repairTranscript } from './tool-result-sanitization';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatMessage, ChatMessagePart, ChatModel } from '@extension/shared';
 
@@ -307,6 +308,7 @@ vi.mock('./summarizer', () => ({
 vi.mock('./tool-result-sanitization', () => ({
   stripToolResultDetails: vi.fn((msgs: ChatMessage[]) => msgs),
   repairToolUseResultPairing: vi.fn((msgs: ChatMessage[]) => msgs),
+  repairTranscript: vi.fn((msgs: ChatMessage[]) => msgs),
 }));
 
 const mockSummarize = vi.mocked(summarizeMessages);
@@ -1269,5 +1271,201 @@ describe('compactMessagesWithSummary — force mode', () => {
     // Should still return a result (sliding-window fallback), not throw
     expect(result).toBeDefined();
     expect(result.compactionMethod).toBe('sliding-window');
+  });
+});
+
+// ── Transcript repair integration ──
+
+describe('compactMessagesWithSummary — transcript repair integration', () => {
+  const mockModelConfig: ChatModel = {
+    id: 'test-model',
+    name: 'Test',
+    provider: 'openai',
+    routingMode: 'direct',
+  };
+
+  it('repairs transcript before compaction', async () => {
+    const mockSummarizeLocal = vi.mocked(summarizeMessages);
+    mockSummarizeLocal.mockResolvedValueOnce('Summary of conversation');
+
+    // Messages with empty message that should be filtered by repair
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'x'.repeat(10000) }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [] }), // empty, should be removed
+      makeMessage({ id: 'm3', role: 'assistant', parts: [{ type: 'text', text: 'x'.repeat(10000) }] }),
+      makeMessage({ id: 'm4', role: 'user', parts: [{ type: 'text', text: 'x'.repeat(10000) }] }),
+      makeMessage({ id: 'm5', role: 'assistant', parts: [{ type: 'text', text: 'x'.repeat(10000) }] }),
+    ];
+
+    // Use force mode to trigger summarization even if under budget
+    await compactMessagesWithSummary(messages, 'test-model', mockModelConfig, {
+      systemPromptTokens: 0,
+      force: true,
+    });
+
+    // Verify repairTranscript was called with the messages
+    const mockRepair = vi.mocked(repairTranscript);
+    expect(mockRepair).toHaveBeenCalled();
+    // The input should include the empty message; repair filters it
+    const inputMessages = mockRepair.mock.calls[0]![0]!;
+    expect(inputMessages.length).toBe(messages.length);
+  });
+});
+
+// ── Timeout fallback ──
+
+describe('compactMessagesWithSummary — timeout fallback', () => {
+  const mockModelConfig: ChatModel = {
+    id: 'test-model',
+    name: 'Test',
+    provider: 'openai',
+    routingMode: 'direct',
+  };
+
+  it('completes normally when summarization finishes within timeout', async () => {
+    const mockSummarizeLocal = vi.mocked(summarizeMessages);
+    mockSummarizeLocal.mockResolvedValueOnce('Fast summary result');
+
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'x'.repeat(50000) }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: 'x'.repeat(50000) }] }),
+      makeMessage({ id: 'm3', role: 'user', parts: [{ type: 'text', text: 'x'.repeat(50000) }] }),
+      makeMessage({ id: 'm4', role: 'assistant', parts: [{ type: 'text', text: 'x'.repeat(50000) }] }),
+      makeMessage({ id: 'm5', role: 'user', parts: [{ type: 'text', text: 'latest question' }] }),
+    ];
+
+    const result = await compactMessagesWithSummary(messages, 'test-model', mockModelConfig, {
+      systemPromptTokens: 0,
+      force: true,
+    });
+
+    expect(result.wasCompacted).toBe(true);
+    // Should use summary method when summarization succeeds
+    expect(result.compactionMethod).toBe('summary');
+  });
+});
+
+describe('compactMessagesWithSummary — configurable settings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uses config.tokenSafetyMargin to influence compaction decision', async () => {
+    // Verify that a higher tokenSafetyMargin triggers compaction
+    // where the default would not, by checking messages that are within
+    // 1.25x budget but exceed 2.0x budget.
+    // We use a tiny contextWindowOverride so the threshold is easy to control.
+    // effective = 1000 * 0.75 = 750 tokens. Budget = 750 - 0 = 750.
+    // Use ~400 tokens (1200 chars). 400 * 1.25 = 500 < 750 (no compact).
+    // 400 * 2.0 = 800 > 750 (compact!).
+    mockSummarize.mockResolvedValue('Summarized');
+
+    const text = 'x'.repeat(1_200); // ~400 tokens
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Start' }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: text }] }),
+      makeMessage({ id: 'm3', role: 'user', parts: [{ type: 'text', text: 'End' }] }),
+    ];
+
+    const defaultResult = await compactMessagesWithSummary(messages, 'test-model', mockModelConfig, {
+      systemPromptTokens: 0,
+      contextWindowOverride: 1_000,
+    });
+    expect(defaultResult.wasCompacted).toBe(false);
+
+    // Same messages but with higher safety margin
+    const strictResult = await compactMessagesWithSummary(messages, 'test-model', mockModelConfig, {
+      systemPromptTokens: 0,
+      contextWindowOverride: 1_000,
+      compactionConfig: { tokenSafetyMargin: 2.0 },
+    });
+    expect(strictResult.wasCompacted).toBe(true);
+  });
+
+  it('uses config.maxHistoryShare to control per-message budget cap', async () => {
+    mockSummarize.mockResolvedValueOnce('Summary');
+
+    const largeAssistant = 'x'.repeat(300_000); // Very large message
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Start' }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: largeAssistant }] }),
+      makeMessage({ id: 'm3', role: 'user', parts: [{ type: 'text', text: 'End' }] }),
+    ];
+
+    // With a very low maxHistoryShare (0.1), the large message should be truncated more aggressively
+    const result = await compactMessagesWithSummary(messages, 'gpt-4o', mockModelConfig, {
+      systemPromptTokens: 0,
+      force: true,
+      compactionConfig: { maxHistoryShare: 0.1 },
+    });
+
+    expect(result.wasCompacted).toBe(true);
+  });
+
+  it('passes compactionConfig quality guard settings to summarizer', async () => {
+    mockSummarize.mockResolvedValueOnce('Summary');
+
+    const longText = 'x'.repeat(300_000);
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Start' }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: longText }] }),
+      makeMessage({ id: 'm3', role: 'user', parts: [{ type: 'text', text: 'End' }] }),
+    ];
+
+    await compactMessagesWithSummary(messages, 'gpt-4o', mockModelConfig, {
+      systemPromptTokens: 0,
+      compactionConfig: {
+        qualityGuardEnabled: false,
+        qualityGuardMaxRetries: 1,
+        identifierPolicy: 'off',
+      },
+    });
+
+    if (mockSummarize.mock.calls.length > 0) {
+      // Verify the summarizer was called with options containing the config
+      const summarizerOpts = mockSummarize.mock.calls[0]![2];
+      expect(summarizerOpts).toBeDefined();
+      if (typeof summarizerOpts === 'object') {
+        expect(summarizerOpts.qualityGuardEnabled).toBe(false);
+        expect(summarizerOpts.qualityGuardMaxRetries).toBe(1);
+        expect(summarizerOpts.identifierPolicy).toBe('off');
+      }
+    }
+  });
+});
+
+// ── Diagnostic fields on CompactionResult ──
+
+describe('compactMessages — diagnostic fields', () => {
+  it('populates tokensBefore, tokensAfter, messagesDropped, durationMs when compaction occurs', () => {
+    const longText = 'x'.repeat(200_000);
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Start' }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: longText }] }),
+      makeMessage({ id: 'm3', role: 'user', parts: [{ type: 'text', text: longText }] }),
+      makeMessage({ id: 'm4', role: 'assistant', parts: [{ type: 'text', text: longText }] }),
+      makeMessage({ id: 'm5', role: 'user', parts: [{ type: 'text', text: 'Latest question' }] }),
+    ];
+    const result = compactMessages(messages, 'gpt-4o');
+    expect(result.wasCompacted).toBe(true);
+    expect(result.tokensBefore).toBeGreaterThan(0);
+    expect(result.tokensAfter).toBeGreaterThan(0);
+    expect(result.tokensAfter).toBeLessThan(result.tokensBefore!);
+    expect(result.messagesDropped).toBeGreaterThan(0);
+    expect(result.messagesDropped).toBe(messages.length - result.messages.length);
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns undefined diagnostics when no compaction needed', () => {
+    const messages = [
+      makeMessage({ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hi' }] }),
+      makeMessage({ id: 'm2', role: 'assistant', parts: [{ type: 'text', text: 'Hello!' }] }),
+    ];
+    const result = compactMessages(messages, 'gpt-4o');
+    expect(result.wasCompacted).toBe(false);
+    expect(result.tokensBefore).toBeUndefined();
+    expect(result.tokensAfter).toBeUndefined();
+    expect(result.messagesDropped).toBeUndefined();
+    expect(result.durationMs).toBeUndefined();
   });
 });

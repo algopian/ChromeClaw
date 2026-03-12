@@ -83,6 +83,9 @@ interface SessionUsage {
   completionTokens: number;
   totalTokens: number;
   wasCompacted?: boolean;
+  compactionMethod?: 'summary' | 'sliding-window' | 'none';
+  compactionTokensBefore?: number;
+  compactionTokensAfter?: number;
   /** Last-step usage for context window display (accurate for % indicator) */
   contextUsage?: {
     promptTokens: number;
@@ -181,6 +184,9 @@ interface LLMStreamEnd {
   };
   wasCompacted?: boolean;
   compactionMethod?: 'summary' | 'sliding-window' | 'none';
+  compactionTokensBefore?: number;
+  compactionTokensAfter?: number;
+  compactionDurationMs?: number;
   /** When true, the background SW has already persisted the assistant message — frontend should skip its own addMessage. */
   persistedByBackground?: boolean;
 }

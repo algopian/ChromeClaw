@@ -1,7 +1,7 @@
 import { completeText } from '../agents/stream-bridge';
 import { shouldUseAdaptiveCompaction, computePartCount, splitMessagesByTokenShare } from './adaptive-compaction';
 import { createLogger } from '../logging/logger-buffer';
-import type { ChatMessage, ChatModel } from '@extension/shared';
+import type { ChatMessage, ChatModel, CompactionConfig } from '@extension/shared';
 
 const summarizerLog = createLogger('stream');
 
@@ -69,6 +69,9 @@ const MAX_SUMMARY_RETRIES = 2;
 /** Base delay for retry backoff (ms) */
 const RETRY_BASE_DELAY_MS = 500;
 
+/** Max delay cap for retry backoff (ms) */
+const RETRY_MAX_DELAY_MS = 5000;
+
 // ── Quality audit ───────────────────────────────
 
 /** Preferred section headers — missing sections warn but don't fail the audit */
@@ -120,6 +123,8 @@ const auditSummaryQuality = (
   summary: string,
   transcript: string,
   latestUserAsk: string,
+  recentMessages?: ChatMessage[],
+  identifierPolicy: 'strict' | 'lenient' | 'off' = 'lenient',
 ): QualityAuditResult => {
   const issues: string[] = [];
   const upperSummary = summary.toUpperCase();
@@ -130,19 +135,45 @@ const auditSummaryQuality = (
     issues.push(`Missing section: ${missingSections.join(', ')}`);
   }
 
-  // Lower identifier threshold: 20% instead of 50%
-  const sourceIds = extractIdentifiers(transcript);
-  if (sourceIds.size > 0) {
-    const summaryIds = extractIdentifiers(summary);
-    let overlapCount = 0;
-    for (const id of sourceIds) {
-      if (summaryIds.has(id) || summary.includes(id)) overlapCount++;
+  // Identifier overlap check — controlled by identifierPolicy
+  if (identifierPolicy !== 'off') {
+    const overlapThreshold = identifierPolicy === 'strict' ? 0.5 : 0.2;
+    const sourceIds = extractIdentifiers(transcript);
+    if (sourceIds.size >= 3) {
+      const summaryIds = extractIdentifiers(summary);
+      let overlapCount = 0;
+      for (const id of sourceIds) {
+        if (summaryIds.has(id) || summary.includes(id)) overlapCount++;
+      }
+      const overlapRatio = overlapCount / sourceIds.size;
+      if (overlapRatio < overlapThreshold) {
+        summarizerLog.trace('Quality audit: identifier overlap failure', {
+          sourceIds: [...sourceIds].slice(0, 10),
+          summaryIds: [...summaryIds].slice(0, 10),
+          overlapCount,
+          total: sourceIds.size,
+        });
+        issues.push(
+          `Low identifier overlap: ${overlapCount}/${sourceIds.size} (${Math.round(overlapRatio * 100)}%)`,
+        );
+      }
     }
-    const overlapRatio = overlapCount / sourceIds.size;
-    if (overlapRatio < 0.2) {
-      issues.push(
-        `Low identifier overlap: ${overlapCount}/${sourceIds.size} (${Math.round(overlapRatio * 100)}%)`,
-      );
+
+    // Recency-weighted identifier check
+    if (recentMessages && recentMessages.length > 0) {
+      const recentIds = extractIdentifiers(formatTranscript(recentMessages));
+      if (recentIds.size >= 3) {
+        let recentOverlap = 0;
+        for (const id of recentIds) {
+          if (summary.includes(id)) recentOverlap++;
+        }
+        const recentOverlapRatio = recentOverlap / recentIds.size;
+        if (recentOverlapRatio < 0.5) {
+          issues.push(
+            `Low recent identifier overlap: ${recentOverlap}/${recentIds.size} (${Math.round(recentOverlapRatio * 100)}%)`,
+          );
+        }
+      }
     }
   }
 
@@ -158,8 +189,8 @@ const auditSummaryQuality = (
     }
   }
 
-  // Pass if no critical issue (only low identifier overlap is critical)
-  const hasCriticalIssue = issues.some(i => i.startsWith('Low identifier'));
+  // Pass if no critical issue (low identifier overlap or low recent identifier overlap)
+  const hasCriticalIssue = issues.some(i => i.startsWith('Low identifier') || i.startsWith('Low recent identifier'));
   return { passed: !hasCriticalIssue, issues };
 };
 
@@ -193,6 +224,14 @@ const formatTranscript = (messages: ChatMessage[]): string =>
       return `${m.role}: ${content}`;
     })
     .join('\n');
+
+/**
+ * Extract identifiers from the last N messages only (recency-weighted).
+ */
+const extractRecentIdentifiers = (messages: ChatMessage[], count = 10): Set<string> => {
+  const recent = messages.slice(-count);
+  return extractIdentifiers(formatTranscript(recent));
+};
 
 /**
  * Extract the latest user ask from messages (searching from the end).
@@ -238,9 +277,143 @@ const getRecentTurnsVerbatim = (messages: ChatMessage[], count: number = RECENT_
  * Sleep with exponential backoff + jitter.
  */
 const backoffDelay = (attempt: number): Promise<void> => {
-  const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-  const jitter = Math.random() * delay * 0.3;
-  return new Promise(resolve => setTimeout(resolve, delay + jitter));
+  const cappedDelay = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * Math.pow(2, attempt));
+  const jitter = Math.random() * cappedDelay * 0.3;
+  return new Promise(resolve => setTimeout(resolve, cappedDelay + jitter));
+};
+
+// ── Tool failure collection ─────────────────────
+
+interface ToolFailure {
+  toolCallId: string;
+  toolName: string;
+  error: string;
+}
+
+/**
+ * Collect tool failures from messages (tool-result parts with state === 'output-error').
+ * Deduplicates by toolCallId and limits to maxFailures.
+ */
+const collectToolFailures = (messages: ChatMessage[], maxFailures = 8): ToolFailure[] => {
+  const seen = new Set<string>();
+  const failures: ToolFailure[] = [];
+
+  for (const msg of messages) {
+    for (const part of msg.parts) {
+      if (part.type === 'tool-result' && part.state === 'output-error') {
+        const toolCallId = part.toolCallId;
+        if (seen.has(toolCallId)) continue;
+        seen.add(toolCallId);
+
+        const resultStr = typeof part.result === 'string'
+          ? part.result
+          : JSON.stringify(part.result);
+        const truncated = resultStr.length > 240 ? resultStr.slice(0, 240) + '...' : resultStr;
+
+        failures.push({
+          toolCallId,
+          toolName: part.toolName,
+          error: truncated,
+        });
+
+        if (failures.length >= maxFailures) return failures;
+      }
+    }
+  }
+
+  return failures;
+};
+
+/**
+ * Format tool failures as a markdown section for prepending to transcript.
+ */
+const formatToolFailures = (failures: ToolFailure[]): string => {
+  if (failures.length === 0) return '';
+  const lines = failures.map(f => `- **${f.toolName}** (${f.toolCallId}): ${f.error}`);
+  return `## Tool failures\n${lines.join('\n')}\n\n`;
+};
+
+// ── File operations tracking ────────────────────
+
+/**
+ * Collect file operations from tool-call parts in messages.
+ * Classifies workspace/document tool calls as read or modified.
+ */
+const collectFileOperations = (messages: ChatMessage[]): { readFiles: string[]; modifiedFiles: string[] } => {
+  const readSet = new Set<string>();
+  const modifiedSet = new Set<string>();
+
+  const READ_TOOLS = ['workspace_read', 'document_read'];
+  const MODIFY_TOOLS = [
+    'workspace_write', 'workspace_create', 'workspace_update',
+    'document_write', 'document_create', 'document_update',
+  ];
+
+  for (const msg of messages) {
+    for (const part of msg.parts) {
+      if (part.type !== 'tool-call') continue;
+
+      const toolName = part.toolName;
+      const args = part.args as Record<string, unknown>;
+      const path = [args.path, args.file, args.filename].find(v => typeof v === 'string') as string ?? '';
+
+      if (READ_TOOLS.includes(toolName) && path) {
+        readSet.add(path);
+      } else if (MODIFY_TOOLS.includes(toolName) && path) {
+        modifiedSet.add(path);
+      } else if (toolName === 'execute-js' && path) {
+        readSet.add(path);
+      }
+    }
+  }
+
+  // Exclude modified files from read list
+  for (const f of modifiedSet) {
+    readSet.delete(f);
+  }
+
+  return {
+    readFiles: [...readSet].sort(),
+    modifiedFiles: [...modifiedSet].sort(),
+  };
+};
+
+/**
+ * Format file operations as a markdown section for prepending to transcript.
+ */
+const formatFileOperations = (ops: { readFiles: string[]; modifiedFiles: string[] }): string => {
+  if (ops.readFiles.length === 0 && ops.modifiedFiles.length === 0) return '';
+  const lines: string[] = ['## File operations'];
+  if (ops.readFiles.length > 0) lines.push(`Read: ${ops.readFiles.join(', ')}`);
+  if (ops.modifiedFiles.length > 0) lines.push(`Modified: ${ops.modifiedFiles.join(', ')}`);
+  return lines.join('\n') + '\n\n';
+};
+
+// ── Workspace critical rules extraction ─────────
+
+/**
+ * Extract critical rules sections from workspace files (AGENTS.md or SOUL.md fallback).
+ * Looks for headers: Red Lines, Session Startup, Rules, Constraints, Safety.
+ */
+const extractCriticalRules = (workspaceFiles: Array<{ name: string; content: string }>): string => {
+  // Find AGENTS.md first, then SOUL.md as fallback
+  const target = workspaceFiles.find(f => f.name === 'AGENTS.md')
+    ?? workspaceFiles.find(f => f.name === 'SOUL.md');
+  if (!target) return '';
+
+  const content = target.content;
+  // Match sections with headers: Red Lines, Session Startup, Rules, Constraints, Safety
+  const sectionPattern = /^##\s+(Red Lines|Session Startup|Rules|Constraints|Safety)\b[^\n]*\n([\s\S]*?)(?=^##\s|$)/gim;
+  const sections: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = sectionPattern.exec(content)) !== null) {
+    sections.push(`## ${match[1]}\n${match[2]!.trim()}`);
+  }
+
+  const combined = sections.join('\n\n');
+  if (combined.length === 0) return '';
+  if (combined.length > 2000) return combined.slice(0, 2000) + '\n[... truncated]';
+  return combined;
 };
 
 // ── Summarization functions ─────────────────────
@@ -249,23 +422,49 @@ const backoffDelay = (attempt: number): Promise<void> => {
 const MAX_SUMMARY_CHARS = 6000;
 
 /** Timeout for the entire summarization process (ms) */
-const SUMMARIZATION_TIMEOUT_MS = 30_000;
+const SUMMARIZATION_TIMEOUT_MS = 120_000;
 
 /**
  * Internal implementation of summarizeMessages with quality audit and retry.
  */
+interface SummarizerOptions {
+  criticalRules?: string;
+  qualityGuardEnabled?: boolean;
+  qualityGuardMaxRetries?: number;
+  identifierPolicy?: 'strict' | 'lenient' | 'off';
+}
+
 const summarizeMessagesImpl = async (
   messages: ChatMessage[],
   modelConfig: ChatModel,
+  options: SummarizerOptions = {},
 ): Promise<string> => {
+  const {
+    criticalRules,
+    qualityGuardEnabled = true,
+    qualityGuardMaxRetries = MAX_SUMMARY_RETRIES,
+    identifierPolicy = 'lenient',
+  } = options;
+
+  const maxRetries = qualityGuardEnabled ? qualityGuardMaxRetries : MAX_SUMMARY_RETRIES;
+
   const transcript = formatTranscript(messages);
   const latestUserAsk = getLatestUserAsk(messages);
   const recentTurns = getRecentTurnsVerbatim(messages);
+  const recentMessages = messages.slice(-10);
+
+  // Collect tool failures and file operations to prepend to transcript
+  const toolFailures = collectToolFailures(messages);
+  const fileOps = collectFileOperations(messages);
+  const criticalRulesPrefix = criticalRules
+    ? `<workspace-critical-rules>\n${criticalRules}\n</workspace-critical-rules>\n\n`
+    : '';
+  const enrichedTranscript = criticalRulesPrefix + formatToolFailures(toolFailures) + formatFileOperations(fileOps) + transcript;
 
   let lastSummary = '';
   let lastIssues: string[] = [];
 
-  for (let attempt = 0; attempt < MAX_SUMMARY_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
       await backoffDelay(attempt - 1);
       summarizerLog.trace('summarizeMessages: retry', { attempt, issues: lastIssues });
@@ -276,7 +475,7 @@ const summarizeMessagesImpl = async (
         ? `${SUMMARY_PROMPT}\n\nIMPORTANT: Your previous summary had these issues:\n${lastIssues.map(i => `- ${i}`).join('\n')}\nPlease fix them.`
         : SUMMARY_PROMPT;
 
-      lastSummary = await completeText(modelConfig, prompt, transcript, {
+      lastSummary = await completeText(modelConfig, prompt, enrichedTranscript, {
         maxTokens: 800,
       });
 
@@ -288,8 +487,12 @@ const summarizeMessagesImpl = async (
       // Append recent turns verbatim
       lastSummary += recentTurns;
 
-      // Quality audit
-      const audit = auditSummaryQuality(lastSummary, transcript, latestUserAsk);
+      // Quality audit with recency check (skip if disabled)
+      if (!qualityGuardEnabled) {
+        return lastSummary;
+      }
+
+      const audit = auditSummaryQuality(lastSummary, transcript, latestUserAsk, recentMessages, identifierPolicy);
       if (audit.passed) {
         summarizerLog.trace('summarizeMessages: quality audit passed', { attempt });
         return lastSummary;
@@ -302,7 +505,7 @@ const summarizeMessagesImpl = async (
       });
     } catch (err) {
       // On the last attempt, throw. Otherwise retry.
-      if (attempt === MAX_SUMMARY_RETRIES - 1) throw err;
+      if (attempt === maxRetries - 1) throw err;
       summarizerLog.trace('summarizeMessages: LLM error, will retry', {
         attempt,
         error: err instanceof Error ? err.message : String(err),
@@ -325,13 +528,20 @@ const summarizeMessagesImpl = async (
 const summarizeMessages = async (
   messages: ChatMessage[],
   modelConfig: ChatModel,
-): Promise<string> =>
-  Promise.race([
-    summarizeMessagesImpl(messages, modelConfig),
+  options?: SummarizerOptions | string,
+): Promise<string> => {
+  // Backward compat: accept criticalRules string directly
+  const opts: SummarizerOptions = typeof options === 'string'
+    ? { criticalRules: options }
+    : (options ?? {});
+
+  return Promise.race([
+    summarizeMessagesImpl(messages, modelConfig, opts),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Summarization timeout')), SUMMARIZATION_TIMEOUT_MS),
     ),
   ]);
+};
 
 /**
  * Multi-stage summarization for very long histories.
@@ -344,7 +554,12 @@ const summarizeInStages = async (
   modelConfig: ChatModel,
   modelId: string,
   contextWindowOverride?: number,
+  options?: SummarizerOptions | string,
 ): Promise<string> => {
+  const opts: SummarizerOptions = typeof options === 'string'
+    ? { criticalRules: options }
+    : (options ?? {});
+  const { criticalRules } = opts;
   const partCount = computePartCount(messages, modelId, contextWindowOverride);
   const parts = splitMessagesByTokenShare(messages, partCount);
 
@@ -354,22 +569,45 @@ const summarizeInStages = async (
     messageCounts: parts.map(p => p.length),
   });
 
-  // Stage 1: Summarize each part in parallel
-  const partialSummaries = await Promise.all(
+  // Stage 1: Summarize each part in parallel (with partial failure fallback)
+  const criticalRulesPrefix = criticalRules
+    ? `<workspace-critical-rules>\n${criticalRules}\n</workspace-critical-rules>\n\n`
+    : '';
+  const settledResults = await Promise.allSettled(
     parts.map(async (part, i) => {
       const transcript = formatTranscript(part);
+      const toolFailures = collectToolFailures(part);
+      const fileOps = collectFileOperations(part);
+      const enrichedTranscript = criticalRulesPrefix + formatToolFailures(toolFailures) + formatFileOperations(fileOps) + transcript;
       return completeText(
         modelConfig,
         `${SUMMARY_PROMPT}\n\nThis is part ${i + 1} of ${parts.length} of the conversation.`,
-        transcript,
+        enrichedTranscript,
         { maxTokens: 800 },
       );
     }),
   );
 
+  // Check if ALL chunks failed — if so, throw to trigger sliding-window fallback
+  const allFailed = settledResults.every(r => r.status === 'rejected');
+  if (allFailed) {
+    throw new Error('All summarization chunks failed');
+  }
+
+  // For fulfilled results use the summary; for rejected, use truncated raw transcript
+  const partialSummaries = settledResults.map((result, i) => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    }
+    const rawTranscript = formatTranscript(parts[i]!);
+    const truncated = rawTranscript.length > 2000 ? rawTranscript.slice(0, 2000) + '...' : rawTranscript;
+    return `[summarization failed for this section]\n${truncated}`;
+  });
+
   summarizerLog.trace('summarizeInStages: partials done', {
     partCount,
     summaryLengths: partialSummaries.map(s => s.length),
+    failedParts: settledResults.filter(r => r.status === 'rejected').length,
   });
 
   // Stage 2: Merge partial summaries
@@ -394,17 +632,25 @@ const summarizeInStages = async (
   return finalSummary;
 };
 
+export type { ToolFailure, SummarizerOptions };
+
 export {
   summarizeMessages,
   summarizeInStages,
+  extractCriticalRules,
   shouldUseAdaptiveCompaction,
   formatTranscript,
   auditSummaryQuality,
   extractIdentifiers,
+  extractRecentIdentifiers,
+  collectToolFailures,
+  collectFileOperations,
   getLatestUserAsk,
   getRecentTurnsVerbatim,
   PREFERRED_SECTIONS,
   MAX_SUMMARY_RETRIES,
+  RETRY_MAX_DELAY_MS,
+  SUMMARIZATION_TIMEOUT_MS,
   RECENT_TURN_MAX_CHARS,
   RECENT_TURNS_TO_PRESERVE,
 };

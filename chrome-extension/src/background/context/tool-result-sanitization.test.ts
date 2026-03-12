@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   stripToolResultDetails,
   repairToolUseResultPairing,
+  repairTranscript,
   MAX_RESULT_CHARS,
   MAX_ARGS_CHARS,
 } from './tool-result-sanitization';
@@ -173,5 +174,107 @@ describe('repairToolUseResultPairing', () => {
     const originalLength = messages[0]!.parts.length;
     repairToolUseResultPairing(messages);
     expect(messages[0]!.parts.length).toBe(originalLength);
+  });
+});
+
+describe('repairTranscript — empty message removal', () => {
+  it('removes messages with no parts', () => {
+    const messages = [
+      makeMessage('user', []),
+      makeMessage('user', [{ type: 'text', text: 'kept' }]),
+    ];
+    const result = repairTranscript(messages);
+    expect(result).toHaveLength(1);
+    expect((result[0]!.parts[0]! as any).text).toBe('kept');
+  });
+
+  it('removes messages with only empty text parts', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: '' }]),
+      makeMessage('user', [{ type: 'text', text: '  ' }]),
+      makeMessage('assistant', [{ type: 'text', text: 'hello' }]),
+    ];
+    const result = repairTranscript(messages);
+    // The two empty user messages should be removed, leaving just assistant
+    expect(result.filter(m => m.role === 'user')).toHaveLength(0);
+  });
+
+  it('keeps messages with non-empty parts', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: 'hello' }]),
+      makeMessage('assistant', [{ type: 'text', text: 'world' }]),
+    ];
+    const result = repairTranscript(messages);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe('repairTranscript — deduplication', () => {
+  it('removes exact duplicate messages (same parts content)', () => {
+    const msg1 = makeMessage('user', [{ type: 'text', text: 'hello' }]);
+    const msg2 = makeMessage('user', [{ type: 'text', text: 'hello' }]);
+    const result = repairTranscript([msg1, msg2]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('keeps messages with different content', () => {
+    const msg1 = makeMessage('user', [{ type: 'text', text: 'hello' }]);
+    const msg2 = makeMessage('user', [{ type: 'text', text: 'world' }]);
+    const result = repairTranscript([msg1, msg2]);
+    // After dedup both are unique, but they are consecutive same-role → merged
+    expect(result).toHaveLength(1);
+    expect(result[0]!.parts).toHaveLength(2);
+  });
+
+  it('keeps messages with same text but different roles', () => {
+    const msg1 = makeMessage('user', [{ type: 'text', text: 'hello' }]);
+    const msg2 = makeMessage('assistant', [{ type: 'text', text: 'hello' }]);
+    const result = repairTranscript([msg1, msg2]);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe('repairTranscript — role ordering', () => {
+  it('merges consecutive user messages', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: 'part1' }]),
+      makeMessage('user', [{ type: 'text', text: 'part2' }]),
+    ];
+    const result = repairTranscript(messages);
+    expect(result.filter(m => m.role === 'user')).toHaveLength(1);
+    expect(result[0]!.parts).toHaveLength(2);
+  });
+
+  it('merges consecutive assistant messages', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: 'ask' }]),
+      makeMessage('assistant', [{ type: 'text', text: 'resp1' }]),
+      makeMessage('assistant', [{ type: 'text', text: 'resp2' }]),
+    ];
+    const result = repairTranscript(messages);
+    const assistants = result.filter(m => m.role === 'assistant');
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0]!.parts).toHaveLength(2);
+  });
+
+  it('preserves system messages anywhere', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: 'ask1' }]),
+      { ...makeMessage('user', [{ type: 'text', text: 'system note' }]), role: 'system' as const },
+      makeMessage('assistant', [{ type: 'text', text: 'resp' }]),
+    ];
+    const result = repairTranscript(messages);
+    expect(result.some(m => m.role === 'system')).toBe(true);
+  });
+
+  it('preserves correct alternation', () => {
+    const messages = [
+      makeMessage('user', [{ type: 'text', text: 'q1' }]),
+      makeMessage('assistant', [{ type: 'text', text: 'a1' }]),
+      makeMessage('user', [{ type: 'text', text: 'q2' }]),
+    ];
+    const result = repairTranscript(messages);
+    expect(result).toHaveLength(3);
+    expect(result.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
   });
 });

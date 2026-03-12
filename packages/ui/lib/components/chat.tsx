@@ -48,7 +48,11 @@ const Chat = ({
   activeSubagents,
 }: ChatProps) => {
   // Track accumulated token usage for context status badge
-  const usageRef = useRef({ inputTokens: 0, outputTokens: 0, totalTokens: 0, compactionCount: 0 });
+  const usageRef = useRef({
+    inputTokens: 0, outputTokens: 0, totalTokens: 0, compactionCount: 0,
+    lastCompactionMethod: undefined as string | undefined,
+    lastCompactionTokensSaved: undefined as number | undefined,
+  });
   const [contextUsage, setContextUsage] = useState(usageRef.current);
 
   // ── TTS chunk-aware audio queue ──
@@ -122,11 +126,16 @@ const Chat = ({
         // Use contextUsage (last step) for display — accurate for context window %
         // Falls back to usage (accumulated) for single-step calls where both are equal
         const ctx = usage.contextUsage ?? usage;
+        const tokensSaved = usage.compactionTokensBefore && usage.compactionTokensAfter
+          ? usage.compactionTokensBefore - usage.compactionTokensAfter
+          : undefined;
         usageRef.current = {
           inputTokens: ctx.promptTokens,
           outputTokens: ctx.completionTokens,
           totalTokens: ctx.totalTokens,
           compactionCount: usageRef.current.compactionCount + (usage.wasCompacted ? 1 : 0),
+          lastCompactionMethod: usage.wasCompacted ? usage.compactionMethod : usageRef.current.lastCompactionMethod,
+          lastCompactionTokensSaved: usage.wasCompacted && tokensSaved != null ? tokensSaved : usageRef.current.lastCompactionTokensSaved,
         };
         setContextUsage({ ...usageRef.current });
       }
@@ -192,6 +201,8 @@ const Chat = ({
       totalTokens: contextUsage.totalTokens,
       compactionCount: contextUsage.compactionCount,
       contextLimit: getEffectiveContextLimit(selectedModel.id, selectedModel.contextWindow),
+      lastCompactionMethod: contextUsage.lastCompactionMethod,
+      lastCompactionTokensSaved: contextUsage.lastCompactionTokensSaved,
     }),
     [contextUsage, selectedModel.id, selectedModel.contextWindow],
   );
@@ -272,6 +283,8 @@ const Chat = ({
                       outputTokens: 0,
                       totalTokens: 0,
                       compactionCount: 0,
+                      lastCompactionMethod: undefined,
+                      lastCompactionTokensSaved: undefined,
                     };
                     setContextUsage({ ...usageRef.current });
                   },

@@ -16,8 +16,8 @@ export { runAgent } from './agent-setup';
 export type { RunAgentOpts, RunAgentResult } from './agent-setup';
 
 // Tool loop detection
-export { createToolLoopState, detectToolCallLoop, recordToolCall } from './tool-loop-detection';
-export type { ToolLoopConfig, ToolLoopState, LoopDetectionResult } from './tool-loop-detection';
+export { createToolLoopState, detectToolCallLoop, recordToolCall, recordToolCallOutcome } from './tool-loop-detection';
+export type { ToolLoopConfig, ToolLoopState, ToolCallRecord, LoopDetectionResult } from './tool-loop-detection';
 
 // Streaming
 export { handleLLMStream } from './stream-handler';

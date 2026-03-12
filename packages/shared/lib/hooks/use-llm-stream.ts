@@ -162,6 +162,9 @@ const useLLMStream = ({
           ? {
               ...end.usage,
               wasCompacted: end.wasCompacted,
+              compactionMethod: end.compactionMethod,
+              compactionTokensBefore: end.compactionTokensBefore,
+              compactionTokensAfter: end.compactionTokensAfter,
               contextUsage: end.contextUsage,
               persistedByBackground: end.persistedByBackground,
             }

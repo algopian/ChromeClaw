@@ -17,7 +17,7 @@ import type {
   StreamFn,
 } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../logging/logger-buffer';
-import { createToolLoopState, detectToolCallLoop, recordToolCall } from './tool-loop-detection';
+import { createToolLoopState, detectToolCallLoop, recordToolCall, recordToolCallOutcome } from './tool-loop-detection';
 import type { ToolLoopState } from './tool-loop-detection';
 
 const agentLoopLog = createLogger('agent');
@@ -404,6 +404,7 @@ const executeToolCalls = async (
 
     // ── Tool loop detection ──
     if (toolLoopState) {
+      await recordToolCall(toolLoopState, toolCall.name, toolCall.arguments, toolCall.id);
       const loopCheck = await detectToolCallLoop(toolLoopState, toolCall.name, toolCall.arguments);
       if (loopCheck.shouldBlock) {
         agentLoopLog.warn('Tool loop detected — blocking', {
@@ -444,6 +445,7 @@ const executeToolCalls = async (
         results.push(toolResultMessage);
         stream.push({ type: 'message_start', message: toolResultMessage });
         stream.push({ type: 'message_end', message: toolResultMessage });
+        await recordToolCallOutcome(toolLoopState, toolCall.id, blockedResult);
         continue;
       }
 
@@ -452,7 +454,7 @@ const executeToolCalls = async (
           toolName: toolCall.name,
           severity: loopCheck.severity,
           reason: loopCheck.reason,
-          totalCalls: toolLoopState.totalCalls,
+          entries: toolLoopState.entries.length,
         });
       }
     }
@@ -489,13 +491,12 @@ const executeToolCalls = async (
       isError = true;
     }
 
-    // Record tool call in loop state
+    // Record tool result in loop state for progress tracking
     if (toolLoopState) {
-      await recordToolCall(toolLoopState, toolCall.name, toolCall.arguments);
-      agentLoopLog.trace('Tool call recorded', {
+      await recordToolCallOutcome(toolLoopState, toolCall.id, result);
+      agentLoopLog.trace('Tool call outcome recorded', {
         toolName: toolCall.name,
-        totalCalls: toolLoopState.totalCalls,
-        windowSize: toolLoopState.entries.length,
+        entries: toolLoopState.entries.length,
       });
     }
 

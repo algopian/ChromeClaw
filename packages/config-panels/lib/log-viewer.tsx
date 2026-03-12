@@ -37,7 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { LogCategory, LogConfig, LogEntry, LogLevel } from '@extension/shared';
 
-const LOG_CATEGORIES: LogCategory[] = ['tool', 'stream', 'auth', 'storage', 'general'];
+const LOG_CATEGORIES: LogCategory[] = ['tool', 'stream', 'slash-cmd', 'auth', 'storage', 'general'];
 
 const MAX_UI_ENTRIES = 1000;
 

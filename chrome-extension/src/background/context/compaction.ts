@@ -1,9 +1,10 @@
 import { getEffectiveContextLimit, getModelContextLimit } from './limits';
 import { summarizeMessages, summarizeInStages, shouldUseAdaptiveCompaction } from './summarizer';
-import { stripToolResultDetails, repairToolUseResultPairing } from './tool-result-sanitization';
+import { stripToolResultDetails, repairToolUseResultPairing, repairTranscript } from './tool-result-sanitization';
 import { truncateToolResultText } from './tool-result-truncation';
 import { createLogger } from '../logging/logger-buffer';
-import type { ChatMessage, ChatMessagePart, ChatModel } from '@extension/shared';
+import type { ChatMessage, ChatMessagePart, ChatModel, CompactionConfig } from '@extension/shared';
+import type { SummarizerOptions } from './summarizer';
 
 const compactionLog = createLogger('stream');
 
@@ -192,6 +193,10 @@ interface CompactionResult {
   wasCompacted: boolean;
   compactionMethod?: 'summary' | 'sliding-window' | 'none';
   summary?: string;
+  tokensBefore?: number;
+  tokensAfter?: number;
+  messagesDropped?: number;
+  durationMs?: number;
 }
 
 /** Detect long base64 sequences in text (data URLs or JSON-embedded base64) */
@@ -274,21 +279,24 @@ const compactMessagesCore = (
   modelId: string,
   systemPromptTokens: number,
   contextWindowOverride?: number,
+  skipRepair?: boolean,
 ): CompactionResult => {
+  const startTime = Date.now();
   const budget = getEffectiveContextLimit(modelId, contextWindowOverride) - systemPromptTokens;
-  const messageSizes = preprocessed.map(estimateMessageTokens);
+  const messages = skipRepair ? preprocessed : repairTranscript(preprocessed);
+  const messageSizes = messages.map(estimateMessageTokens);
   const totalTokens = messageSizes.reduce((a, b) => a + b, 0);
 
   const adjustedTotal = Math.ceil(totalTokens * TOKEN_SAFETY_MARGIN);
   if (adjustedTotal <= budget) {
-    return { messages: preprocessed, wasCompacted: false };
+    return { messages, wasCompacted: false };
   }
 
   // Always keep the first user message as anchor
-  const anchorIdx = preprocessed.findIndex(m => m.role === 'user');
+  const anchorIdx = messages.findIndex(m => m.role === 'user');
   if (anchorIdx < 0) {
     // No user message — cannot compact meaningfully
-    return { messages: preprocessed, wasCompacted: false };
+    return { messages, wasCompacted: false };
   }
 
   const anchorTokens = messageSizes[anchorIdx]!;
@@ -297,31 +305,42 @@ const compactMessagesCore = (
   let remainingBudget = budget - anchorTokens - markerTokens;
   if (remainingBudget <= 0) {
     // Even the anchor doesn't fit — return just anchor
-    return { messages: [preprocessed[anchorIdx]!], wasCompacted: true, compactionMethod: 'sliding-window' };
+    const tokensAfter = estimateMessageTokens(messages[anchorIdx]!);
+    const durationMs = Date.now() - startTime;
+    compactionLog.info('Compaction complete', {
+      method: 'sliding-window',
+      tokensBefore: totalTokens, tokensAfter,
+      tokensSaved: totalTokens - tokensAfter,
+      messagesDropped: messages.length - 1,
+      durationMs,
+      messagesBefore: messages.length,
+      messagesAfter: 1,
+    });
+    return { messages: [messages[anchorIdx]!], wasCompacted: true, compactionMethod: 'sliding-window', tokensBefore: totalTokens, tokensAfter, messagesDropped: messages.length - 1, durationMs };
   }
 
   // Fill from the end — but guarantee at least MIN_RECENT_MESSAGES
   const recentMessages: ChatMessage[] = [];
-  for (let i = preprocessed.length - 1; i > anchorIdx; i--) {
+  for (let i = messages.length - 1; i > anchorIdx; i--) {
     const size = messageSizes[i]!;
     const mustKeep = recentMessages.length < MIN_RECENT_MESSAGES;
     if (size <= remainingBudget) {
-      recentMessages.unshift(preprocessed[i]!);
+      recentMessages.unshift(messages[i]!);
       remainingBudget -= size;
     } else if (mustKeep) {
       // Force-keep even if over budget — better to exceed slightly than lose all context
-      recentMessages.unshift(preprocessed[i]!);
+      recentMessages.unshift(messages[i]!);
       remainingBudget -= size;
     } else {
       break;
     }
   }
 
-  const droppedCount = preprocessed.length - 1 - recentMessages.length; // -1 for anchor
+  const droppedCount = messages.length - 1 - recentMessages.length; // -1 for anchor
 
   const compactionMarker: ChatMessage = {
     id: '__compaction_marker__',
-    chatId: preprocessed[0]!.chatId,
+    chatId: messages[0]!.chatId,
     role: 'system',
     parts: [
       {
@@ -333,7 +352,7 @@ const compactMessagesCore = (
   };
 
   let result = repairToolUseResultPairing([
-    preprocessed[anchorIdx]!,
+    messages[anchorIdx]!,
     compactionMarker,
     ...recentMessages,
   ]);
@@ -342,10 +361,28 @@ const compactMessagesCore = (
   // aggressively truncate the largest tool results in the recent window.
   result = enforceHardTokenLimit(result, modelId, systemPromptTokens, contextWindowOverride);
 
+  const tokensAfter = result.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+  const messagesDropped = messages.length - result.length;
+  const durationMs = Date.now() - startTime;
+
+  compactionLog.info('Compaction complete', {
+    method: 'sliding-window',
+    tokensBefore: totalTokens, tokensAfter,
+    tokensSaved: totalTokens - tokensAfter,
+    messagesDropped,
+    durationMs,
+    messagesBefore: messages.length,
+    messagesAfter: result.length,
+  });
+
   return {
     messages: result,
     wasCompacted: true,
     compactionMethod: 'sliding-window',
+    tokensBefore: totalTokens,
+    tokensAfter,
+    messagesDropped,
+    durationMs,
   };
 };
 
@@ -452,6 +489,8 @@ const compactMessages = (
  * 4. Replace older messages with a summary system message
  * 5. Fall back to sliding-window compaction on failure
  */
+const COMPACTION_TIMEOUT_MS = 180_000;
+
 const compactMessagesWithSummary = async (
   messages: ChatMessage[],
   modelId: string,
@@ -461,23 +500,34 @@ const compactMessagesWithSummary = async (
     existingSummary?: string;
     contextWindowOverride?: number;
     force?: boolean;
+    criticalRules?: string;
+    compactionConfig?: Partial<CompactionConfig>;
   } = {},
 ): Promise<CompactionResult> => {
-  const { systemPromptTokens = 0, existingSummary, contextWindowOverride, force } = options;
+  const startTime = Date.now();
+  const { systemPromptTokens = 0, existingSummary, contextWindowOverride, force, criticalRules, compactionConfig } = options;
+
+  // Resolve configurable values from compaction config or hardcoded defaults
+  const cfgMaxHistoryShare = compactionConfig?.maxHistoryShare ?? MAX_HISTORY_SHARE;
+  const cfgTokenSafetyMargin = compactionConfig?.tokenSafetyMargin ?? TOKEN_SAFETY_MARGIN;
+  const cfgMinRecentMessages = compactionConfig?.recentTurnsPreserve ?? MIN_RECENT_MESSAGES;
 
   if (messages.length <= 2) {
     return { messages, wasCompacted: false, compactionMethod: 'none' };
   }
 
+  // Repair transcript: remove empty/duplicate messages, fix role ordering, repair tool pairing
+  const repaired = repairTranscript(messages);
+
   // Preprocess: truncate oversized tool results + compact oldest results
-  const truncated = preprocessToolResults(messages, modelId, systemPromptTokens, contextWindowOverride);
+  const truncated = preprocessToolResults(repaired, modelId, systemPromptTokens, contextWindowOverride);
 
   const effectiveLimit = getEffectiveContextLimit(modelId, contextWindowOverride);
   const budget = effectiveLimit - systemPromptTokens;
   const messageSizes = truncated.map(estimateMessageTokens);
   const totalTokens = messageSizes.reduce((a, b) => a + b, 0);
 
-  const adjustedTotal = Math.ceil(totalTokens * TOKEN_SAFETY_MARGIN);
+  const adjustedTotal = Math.ceil(totalTokens * cfgTokenSafetyMargin);
 
   compactionLog.trace('compaction: budget calculation', {
     effectiveLimit,
@@ -505,17 +555,32 @@ const compactMessagesWithSummary = async (
   let remainingBudget = budget - anchorTokens - summaryReserve;
 
   if (remainingBudget <= 0) {
+    const tokensAfter = estimateMessageTokens(truncated[anchorIdx]!);
+    const durationMs = Date.now() - startTime;
+    compactionLog.info('Compaction complete', {
+      method: 'sliding-window',
+      tokensBefore: totalTokens, tokensAfter,
+      tokensSaved: totalTokens - tokensAfter,
+      messagesDropped: truncated.length - 1,
+      durationMs,
+      messagesBefore: truncated.length,
+      messagesAfter: 1,
+    });
     return {
       messages: [truncated[anchorIdx]!],
       wasCompacted: true,
       compactionMethod: 'sliding-window',
+      tokensBefore: totalTokens,
+      tokensAfter,
+      messagesDropped: truncated.length - 1,
+      durationMs,
     };
   }
 
   // maxHistoryShare guard: cap how much of the budget any single message
-  // can consume. If a message exceeds MAX_HISTORY_SHARE of the budget,
+  // can consume. If a message exceeds the configured share of the budget,
   // truncate its tool results to fit within the cap.
-  const historyShareCap = Math.floor(budget * MAX_HISTORY_SHARE);
+  const historyShareCap = Math.floor(budget * cfgMaxHistoryShare);
   for (let i = anchorIdx + 1; i < truncated.length; i++) {
     if (messageSizes[i]! > historyShareCap) {
       compactionLog.trace('compaction: maxHistoryShare guard triggered, truncating', {
@@ -531,12 +596,12 @@ const compactMessagesWithSummary = async (
     }
   }
 
-  // Fill from the end — but guarantee at least MIN_RECENT_MESSAGES
+  // Fill from the end — but guarantee at least cfgMinRecentMessages
   const recentMessages: ChatMessage[] = [];
   let splitIdx = truncated.length;
   for (let i = truncated.length - 1; i > anchorIdx; i--) {
     const size = messageSizes[i]!;
-    const mustKeep = recentMessages.length < MIN_RECENT_MESSAGES;
+    const mustKeep = recentMessages.length < cfgMinRecentMessages;
     if (size <= remainingBudget) {
       recentMessages.unshift(truncated[i]!);
       remainingBudget -= size;
@@ -593,102 +658,153 @@ const compactMessagesWithSummary = async (
   }
 
   if (olderMessages.length === 0) {
-    // Nothing to summarize — fall back to sliding window (already preprocessed)
-    return compactMessagesCore(truncated, modelId, systemPromptTokens, contextWindowOverride);
+    // Nothing to summarize — fall back to sliding window (already preprocessed + repaired)
+    const fallback = compactMessagesCore(truncated, modelId, systemPromptTokens, contextWindowOverride, true);
+    // Preserve the outer startTime for more accurate total duration
+    if (fallback.wasCompacted) {
+      fallback.durationMs = Date.now() - startTime;
+      fallback.tokensBefore = fallback.tokensBefore ?? totalTokens;
+    }
+    return fallback;
   }
 
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
   try {
-    // Build summary from older messages + any existing summary context
-    const toSummarize = existingSummary
-      ? [
-          {
-            id: '__prior_summary__',
-            chatId: truncated[0]!.chatId,
-            role: 'system' as const,
-            parts: [{ type: 'text' as const, text: `Previous summary: ${existingSummary}` }],
-            createdAt: 0,
-          },
-          ...olderMessages,
-        ]
-      : olderMessages;
+    const summarizationResult = await Promise.race([
+      (async (): Promise<CompactionResult> => {
+        // Build summary from older messages + any existing summary context
+        const toSummarize = existingSummary
+          ? [
+              {
+                id: '__prior_summary__',
+                chatId: truncated[0]!.chatId,
+                role: 'system' as const,
+                parts: [{ type: 'text' as const, text: `Previous summary: ${existingSummary}` }],
+                createdAt: 0,
+              },
+              ...olderMessages,
+            ]
+          : olderMessages;
 
-    // Sanitize tool results before summarization
-    let sanitized = repairToolUseResultPairing(stripToolResultDetails(toSummarize));
+        // Sanitize tool results before summarization
+        let sanitized = repairToolUseResultPairing(stripToolResultDetails(toSummarize));
 
-    // Fix: ensure the messages to summarize don't exceed what the summarization
-    // LLM can handle. Use 60% of the effective limit as a safe ceiling, then
-    // aggressively truncate tool results if the sanitized messages are too large.
-    const maxSummarizationTokens = Math.floor(effectiveLimit * 0.6);
-    const sanitizedTokens = sanitized.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
-    if (sanitizedTokens > maxSummarizationTokens) {
-      compactionLog.trace('compaction: sanitized messages too large for summarization, truncating', {
-        sanitizedTokens,
-        maxSummarizationTokens,
-      });
-      sanitized = enforceHardTokenLimit(sanitized, modelId, systemPromptTokens, contextWindowOverride);
-    }
+        // Fix: ensure the messages to summarize don't exceed what the summarization
+        // LLM can handle. Use 60% of the effective limit as a safe ceiling, then
+        // aggressively truncate tool results if the sanitized messages are too large.
+        const maxSummarizationTokens = Math.floor(effectiveLimit * 0.6);
+        const sanitizedTokens = sanitized.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+        if (sanitizedTokens > maxSummarizationTokens) {
+          compactionLog.trace('compaction: sanitized messages too large for summarization, truncating', {
+            sanitizedTokens,
+            maxSummarizationTokens,
+          });
+          sanitized = enforceHardTokenLimit(sanitized, modelId, systemPromptTokens, contextWindowOverride);
+        }
 
-    const useAdaptive = shouldUseAdaptiveCompaction(sanitized, modelId, contextWindowOverride);
+        const useAdaptive = shouldUseAdaptiveCompaction(sanitized, modelId, contextWindowOverride);
 
-    compactionLog.trace('compaction: sanitized for summarization', {
-      messagesBefore: toSummarize.length,
-      messagesAfter: sanitized.length,
-      method: useAdaptive ? 'adaptive' : 'single-pass',
-    });
+        compactionLog.trace('compaction: sanitized for summarization', {
+          messagesBefore: toSummarize.length,
+          messagesAfter: sanitized.length,
+          method: useAdaptive ? 'adaptive' : 'single-pass',
+        });
 
-    if (useAdaptive) {
-      compactionLog.trace('compaction: using adaptive summarization', {
-        totalTokens,
-        contextWindow: budget + systemPromptTokens,
-      });
-    }
+        if (useAdaptive) {
+          compactionLog.trace('compaction: using adaptive summarization', {
+            totalTokens,
+            contextWindow: budget + systemPromptTokens,
+          });
+        }
 
-    // Choose single-pass or adaptive (multi-part) summarization
-    const summary = useAdaptive
-      ? await summarizeInStages(sanitized, modelConfig, modelId, contextWindowOverride)
-      : await summarizeMessages(sanitized, modelConfig);
+        // Build summarizer options from compaction config
+        const summarizerOpts: SummarizerOptions = {
+          criticalRules,
+          qualityGuardEnabled: compactionConfig?.qualityGuardEnabled,
+          qualityGuardMaxRetries: compactionConfig?.qualityGuardMaxRetries,
+          identifierPolicy: compactionConfig?.identifierPolicy,
+        };
 
-    const summaryMessage: ChatMessage = {
-      id: '__compaction_summary__',
-      chatId: truncated[0]!.chatId,
-      role: 'system',
-      parts: [
-        {
-          type: 'text',
-          text: `[Conversation summary]\n${summary}`,
-        },
-      ],
-      createdAt: Date.now(),
-    };
+        // Choose single-pass or adaptive (multi-part) summarization
+        const summary = useAdaptive
+          ? await summarizeInStages(sanitized, modelConfig, modelId, contextWindowOverride, summarizerOpts)
+          : await summarizeMessages(sanitized, modelConfig, summarizerOpts);
 
-    compactionLog.trace('compaction: summary completed', {
-      method: useAdaptive ? 'adaptive' : 'single-pass',
-      summaryLength: summary.length,
-      olderMessages: olderMessages.length,
-      recentMessages: recentMessages.length,
-    });
+        const summaryMessage: ChatMessage = {
+          id: '__compaction_summary__',
+          chatId: truncated[0]!.chatId,
+          role: 'system',
+          parts: [
+            {
+              type: 'text',
+              text: `[Conversation summary]\n${summary}`,
+            },
+          ],
+          createdAt: Date.now(),
+        };
 
-    let repaired = repairToolUseResultPairing([
-      truncated[anchorIdx]!,
-      summaryMessage,
-      ...recentMessages,
+        compactionLog.trace('compaction: summary completed', {
+          method: useAdaptive ? 'adaptive' : 'single-pass',
+          summaryLength: summary.length,
+          olderMessages: olderMessages.length,
+          recentMessages: recentMessages.length,
+        });
+
+        let repaired = repairToolUseResultPairing([
+          truncated[anchorIdx]!,
+          summaryMessage,
+          ...recentMessages,
+        ]);
+
+        // Post-compaction safety: enforce hard token limit on summary result too
+        repaired = enforceHardTokenLimit(repaired, modelId, systemPromptTokens, contextWindowOverride);
+
+        const tokensAfter = repaired.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+        const messagesDropped = truncated.length - repaired.length;
+        const durationMs = Date.now() - startTime;
+
+        compactionLog.info('Compaction complete', {
+          method: 'summary',
+          tokensBefore: totalTokens, tokensAfter,
+          tokensSaved: totalTokens - tokensAfter,
+          messagesDropped,
+          durationMs,
+          messagesBefore: truncated.length,
+          messagesAfter: repaired.length,
+        });
+
+        return {
+          messages: repaired,
+          wasCompacted: true,
+          compactionMethod: 'summary',
+          summary,
+          tokensBefore: totalTokens,
+          tokensAfter,
+          messagesDropped,
+          durationMs,
+        };
+      })(),
+      new Promise<CompactionResult>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Compaction timeout')), COMPACTION_TIMEOUT_MS);
+      }),
     ]);
 
-    // Post-compaction safety: enforce hard token limit on summary result too
-    repaired = enforceHardTokenLimit(repaired, modelId, systemPromptTokens, contextWindowOverride);
-
-    return {
-      messages: repaired,
-      wasCompacted: true,
-      compactionMethod: 'summary',
-      summary,
-    };
+    clearTimeout(timeoutId);
+    return summarizationResult;
   } catch (err) {
-    // Summarization failed — fall back to sliding window
-    compactionLog.trace('compaction: fell back to sliding-window', {
+    clearTimeout(timeoutId);
+    // Summarization or timeout failed — fall back to sliding window
+    // truncated is safe to reuse here: the summarization IIFE creates its own copies
+    compactionLog.info('compaction: fell back to sliding-window', {
       error: err instanceof Error ? err.message : String(err),
     });
-    const fallback = compactMessagesCore(truncated, modelId, systemPromptTokens, contextWindowOverride);
+    const fallback = compactMessagesCore(truncated, modelId, systemPromptTokens, contextWindowOverride, true);
+    // Preserve the outer startTime for more accurate total duration
+    if (fallback.wasCompacted) {
+      fallback.durationMs = Date.now() - startTime;
+      fallback.tokensBefore = fallback.tokensBefore ?? totalTokens;
+    }
     return { ...fallback, compactionMethod: 'sliding-window' };
   }
 };
@@ -753,5 +869,6 @@ export {
   CHARS_PER_TOKEN_BUDGET,
   MAX_HISTORY_SHARE,
   TOOL_RESULT_COMPACTION_PLACEHOLDER,
+  COMPACTION_TIMEOUT_MS,
 };
 export type { CompactionResult, MemoryFlushCheck };

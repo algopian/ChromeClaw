@@ -187,4 +187,67 @@ const repairToolUseResultPairing = (messages: ChatMessage[]): ChatMessage[] => {
   });
 };
 
-export { stripToolResultDetails, repairToolUseResultPairing, MAX_RESULT_CHARS, MAX_ARGS_CHARS };
+/**
+ * Comprehensive session transcript repair.
+ * Runs all repairs in sequence:
+ * 1. Remove empty messages
+ * 2. Deduplicate messages
+ * 3. Role ordering repair (ensure alternating user/assistant)
+ * 4. Tool use/result pairing repair
+ *
+ * Non-mutating — returns a new array.
+ */
+const repairTranscript = (messages: ChatMessage[]): ChatMessage[] => {
+  // Step 1: Remove empty messages
+  let repaired = messages.filter(msg => {
+    if (msg.parts.length === 0) return false;
+    // Remove messages with only empty text parts
+    const hasContent = msg.parts.some(p => {
+      if (p.type === 'text') return p.text.trim().length > 0;
+      return true; // non-text parts always count as content
+    });
+    return hasContent;
+  });
+
+  // Step 2: Deduplicate messages by content hash
+  // Use a lightweight key for messages with tool parts to avoid serializing large results
+  const seen = new Set<string>();
+  repaired = repaired.filter(msg => {
+    const hasToolParts = msg.parts.some(p => p.type === 'tool-result' || p.type === 'tool-call');
+    const hash = hasToolParts
+      ? `${msg.role}:${msg.parts.length}:${msg.parts.map(p => `${p.type}:${'toolCallId' in p ? p.toolCallId : ''}`).join(',')}`
+      : `${msg.role}:${JSON.stringify(msg.parts)}`;
+    if (seen.has(hash)) return false;
+    seen.add(hash);
+    return true;
+  });
+
+  // Step 3: Role ordering repair — merge consecutive same-role messages
+  // System messages can appear anywhere (skip in alternation check)
+  const merged: ChatMessage[] = [];
+  let lastNonSystemIdx = -1;
+  for (const msg of repaired) {
+    if (msg.role === 'system') {
+      merged.push(msg);
+      continue;
+    }
+    if (lastNonSystemIdx >= 0 && merged[lastNonSystemIdx]!.role === msg.role) {
+      // Merge into the last same-role message
+      merged[lastNonSystemIdx] = {
+        ...merged[lastNonSystemIdx]!,
+        parts: [...merged[lastNonSystemIdx]!.parts, ...msg.parts],
+      };
+    } else {
+      merged.push(msg);
+      lastNonSystemIdx = merged.length - 1;
+    }
+  }
+  repaired = merged;
+
+  // Step 4: Tool use/result pairing repair (existing function)
+  repaired = repairToolUseResultPairing(repaired);
+
+  return repaired;
+};
+
+export { stripToolResultDetails, repairToolUseResultPairing, repairTranscript, MAX_RESULT_CHARS, MAX_ARGS_CHARS };

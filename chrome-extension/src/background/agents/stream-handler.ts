@@ -366,6 +366,9 @@ const handleLLMStream = async (
             | 'sliding-window'
             | 'none'
             | undefined,
+          compactionTokensBefore: compactionResult.tokensBefore,
+          compactionTokensAfter: compactionResult.tokensAfter,
+          compactionDurationMs: compactionResult.durationMs,
           persistedByBackground: true,
         };
 

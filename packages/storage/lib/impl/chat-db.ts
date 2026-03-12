@@ -44,6 +44,9 @@ interface DbChat {
   source?: string;
   channelMeta?: DbChannelMeta;
   agentId?: string;
+  compactionTokensBefore?: number;
+  compactionTokensAfter?: number;
+  compactionMethod?: 'summary' | 'sliding-window' | 'adaptive' | 'none';
 }
 
 /** DB-level artifact */
@@ -153,6 +156,15 @@ interface AgentConfig {
   model?: AgentModelConfig;
   toolConfig?: import('./tool-config-storage.js').ToolConfig;
   customTools?: CustomToolDef[];
+  compactionConfig?: {
+    maxHistoryShare?: number;
+    recentTurnsPreserve?: number;
+    tokenSafetyMargin?: number;
+    toolResultContextShare?: number;
+    qualityGuardEnabled?: boolean;
+    qualityGuardMaxRetries?: number;
+    identifierPolicy?: 'strict' | 'lenient' | 'off';
+  };
   createdAt: number;
   updatedAt: number;
 }

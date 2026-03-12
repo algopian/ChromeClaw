@@ -197,6 +197,17 @@ const updateCompactionSummary = async (chatId: string, summary: string): Promise
   await chatDb.chats.update(chatId, { compactionSummary: summary });
 };
 
+const updateCompactionMetadata = async (
+  chatId: string,
+  metadata: {
+    compactionTokensBefore?: number;
+    compactionTokensAfter?: number;
+    compactionMethod?: 'summary' | 'sliding-window' | 'adaptive' | 'none';
+  },
+): Promise<void> => {
+  await chatDb.chats.update(chatId, metadata);
+};
+
 const getMostRecentChat = async (agentId?: string): Promise<DbChat | undefined> => {
   if (agentId) {
     const all = await chatDb.chats.where('agentId').equals(agentId).toArray();
@@ -556,6 +567,7 @@ export {
   updateSessionTokens,
   incrementCompactionCount,
   updateCompactionSummary,
+  updateCompactionMetadata,
   getMostRecentChat,
   touchChat,
   updateMemoryFlush,

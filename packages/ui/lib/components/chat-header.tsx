@@ -21,6 +21,8 @@ type ContextStatus = {
   totalTokens: number;
   compactionCount: number;
   contextLimit: number;
+  lastCompactionMethod?: string;
+  lastCompactionTokensSaved?: number;
 };
 
 type ChatHeaderProps = {
@@ -89,6 +91,8 @@ const PureChatHeader = ({
         compactionCount={contextStatus.compactionCount}
         contextLimit={contextStatus.contextLimit}
         inputTokens={contextStatus.inputTokens}
+        lastCompactionMethod={contextStatus.lastCompactionMethod}
+        lastCompactionTokensSaved={contextStatus.lastCompactionTokensSaved}
         outputTokens={contextStatus.outputTokens}
         totalTokens={contextStatus.totalTokens}
       />

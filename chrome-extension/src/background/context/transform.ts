@@ -3,10 +3,12 @@
  * Wraps the existing compaction pipeline as a pi-mono transformContext hook.
  */
 
-import { compactMessagesWithSummary } from './compaction';
+import { compactMessagesWithSummary, estimateMessageTokens } from './compaction';
+import { enforceToolResultBudget } from './tool-result-context-guard';
 import { chatMessagesToPiMessages } from '../agents/message-adapter';
 import { createLogger } from '../logging/logger-buffer';
-import { updateCompactionSummary, incrementCompactionCount, getChat } from '@extension/storage';
+import { updateCompactionSummary, incrementCompactionCount, updateCompactionMetadata, getChat, getAgent, getEnabledWorkspaceFiles } from '@extension/storage';
+import { extractCriticalRules } from './summarizer';
 import type { AgentMessage, ImageContent } from '../agents';
 import type { ChatModel, ChatMessage, ChatMessagePart } from '@extension/shared';
 
@@ -26,6 +28,9 @@ interface TransformContextOpts {
 interface TransformResult {
   wasCompacted: boolean;
   compactionMethod?: string;
+  tokensBefore?: number;
+  tokensAfter?: number;
+  durationMs?: number;
 }
 
 /**
@@ -67,16 +72,33 @@ const createTransformContext = (
       effectiveContextWindow,
     });
 
+    // Load workspace files and extract critical rules for compaction
+    const workspaceFiles = opts.agentId ? await getEnabledWorkspaceFiles(opts.agentId) : [];
+    const criticalRules = extractCriticalRules(workspaceFiles);
+
+    // Load agent's compaction config (if any)
+    const agentConfig = opts.agentId ? await getAgent(opts.agentId) : undefined;
+    const compactionConfig = agentConfig?.compactionConfig;
+
+    // Pre-compaction: enforce tool result budget to prevent massive results from reaching compaction
+    const guardedMessages = enforceToolResultBudget(chatMessages, opts.modelConfig.id, effectiveContextWindow);
+
+    // Estimate tokens before compaction
+    const tokensBefore = guardedMessages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+
     // Run compaction
     const {
       messages: compactedMessages,
       wasCompacted,
       compactionMethod,
       summary,
-    } = await compactMessagesWithSummary(chatMessages, opts.modelConfig.id, opts.modelConfig, {
+      durationMs: compactionDurationMs,
+    } = await compactMessagesWithSummary(guardedMessages, opts.modelConfig.id, opts.modelConfig, {
       systemPromptTokens: opts.systemPromptTokens,
       existingSummary,
       contextWindowOverride: effectiveContextWindow,
+      criticalRules,
+      compactionConfig,
     });
 
     compactLog.debug('Compaction', { method: compactionMethod, wasCompacted });
@@ -85,13 +107,27 @@ const createTransformContext = (
     if (summary) {
       updateCompactionSummary(opts.chatId, summary).catch(console.error);
     }
+    const tokensAfter = wasCompacted
+      ? compactedMessages.reduce((sum, m) => sum + estimateMessageTokens(m), 0)
+      : undefined;
+
     if (wasCompacted) {
       incrementCompactionCount(opts.chatId).catch(console.error);
+
+      // Persist compaction metadata for observability
+      updateCompactionMetadata(opts.chatId, {
+        compactionTokensBefore: tokensBefore,
+        compactionTokensAfter: tokensAfter!,
+        compactionMethod: compactionMethod as 'summary' | 'sliding-window' | 'adaptive' | 'none',
+      }).catch(console.error);
     }
 
     // Update result for caller
     result.wasCompacted = wasCompacted;
     result.compactionMethod = compactionMethod;
+    result.tokensBefore = tokensBefore;
+    result.tokensAfter = tokensAfter;
+    result.durationMs = compactionDurationMs;
 
     // Convert back to AgentMessage[] (pi-mono Message[])
     return chatMessagesToPiMessages(compactedMessages);

@@ -229,9 +229,11 @@ const messageHandlers: Record<string, MessageHandler> = {
 
     slashCmdLog.trace('COMPACT_REQUEST received', { chatId, modelId: modelConfig.id });
 
-    const { getMessagesByChatId, getChat, updateCompactionSummary, incrementCompactionCount } =
+    const { getMessagesByChatId, getChat, updateCompactionSummary, incrementCompactionCount, getEnabledWorkspaceFiles } =
       await import('@extension/storage');
     const { compactMessagesWithSummary } = await import('./context/compaction');
+    const { enforceToolResultBudget } = await import('./context/tool-result-context-guard');
+    const { extractCriticalRules } = await import('./context/summarizer');
     const { buildHeadlessSystemPrompt } = await import('./agents/agent-setup');
     const { getProviderTokenLimit } = await import('./context/provider-limit-cache');
 
@@ -258,8 +260,19 @@ const messageHandlers: Record<string, MessageHandler> = {
     });
 
     try {
-      const result = await compactMessagesWithSummary(
+      // Pre-compaction: enforce tool result budget (same as transform.ts auto-compaction path)
+      const guarded = enforceToolResultBudget(
         messages as import('@extension/shared').ChatMessage[],
+        modelConfig.id,
+        effectiveContextWindow,
+      );
+
+      // Extract critical rules from workspace files for summary context
+      const workspaceFiles = await getEnabledWorkspaceFiles(agentId);
+      const criticalRules = extractCriticalRules(workspaceFiles);
+
+      const result = await compactMessagesWithSummary(
+        guarded,
         modelConfig.id,
         modelConfig,
         {
@@ -267,6 +280,7 @@ const messageHandlers: Record<string, MessageHandler> = {
           systemPromptTokens,
           contextWindowOverride: effectiveContextWindow,
           force: true,
+          criticalRules,
         },
       );
 
@@ -276,11 +290,17 @@ const messageHandlers: Record<string, MessageHandler> = {
         return { error: 'Not enough messages to compact' };
       }
 
-      slashCmdLog.debug('Compaction result', {
+      slashCmdLog.info('Compaction result', {
         chatId,
         wasCompacted: result.wasCompacted,
+        compactionMethod: result.compactionMethod,
         summaryLength: result.summary?.length ?? 0,
         keptMessages: result.messages.length,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        tokensSaved: result.tokensBefore && result.tokensAfter ? result.tokensBefore - result.tokensAfter : undefined,
+        messagesDropped: result.messagesDropped,
+        durationMs: result.durationMs,
       });
 
       // Persist: delete old messages and keep only the compacted set
@@ -293,7 +313,15 @@ const messageHandlers: Record<string, MessageHandler> = {
       if (result.summary) await updateCompactionSummary(chatId, result.summary);
       await incrementCompactionCount(chatId);
 
-      return { success: true, summary: result.summary ?? '' };
+      return {
+        success: true,
+        summary: result.summary ?? '',
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        messagesDropped: result.messagesDropped,
+        compactionMethod: result.compactionMethod,
+        durationMs: result.durationMs,
+      };
     } catch (err) {
       slashCmdLog.error('Compaction failed', { chatId, error: String(err) });
       throw err;

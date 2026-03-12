@@ -42,6 +42,7 @@ export {
   updateSessionTokens,
   incrementCompactionCount,
   updateCompactionSummary,
+  updateCompactionMetadata,
   getMostRecentChat,
   touchChat,
   updateMemoryFlush,

@@ -5,7 +5,7 @@
  */
 import { compactMessagesWithSummary } from './compaction';
 import { createTransformContext } from './transform';
-import { updateCompactionSummary, incrementCompactionCount } from '@extension/storage';
+import { updateCompactionSummary, incrementCompactionCount, updateCompactionMetadata, getAgent } from '@extension/storage';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatModel, ChatMessage } from '@extension/shared';
 
@@ -15,6 +15,7 @@ import type { ChatModel, ChatMessage } from '@extension/shared';
 
 vi.mock('./compaction', () => ({
   compactMessagesWithSummary: vi.fn(),
+  estimateMessageTokens: vi.fn(() => 100),
 }));
 
 vi.mock('../agents/message-adapter', () => ({
@@ -62,7 +63,18 @@ vi.mock('../logging/logger-buffer', () => ({
 vi.mock('@extension/storage', () => ({
   updateCompactionSummary: vi.fn(async () => {}),
   incrementCompactionCount: vi.fn(async () => {}),
+  updateCompactionMetadata: vi.fn(async () => {}),
   getChat: vi.fn(async () => null),
+  getAgent: vi.fn(async () => undefined),
+  getEnabledWorkspaceFiles: vi.fn(async () => []),
+}));
+
+vi.mock('./tool-result-context-guard', () => ({
+  enforceToolResultBudget: vi.fn((msgs: ChatMessage[]) => msgs),
+}));
+
+vi.mock('./summarizer', () => ({
+  extractCriticalRules: vi.fn(() => undefined),
 }));
 
 // ── Test fixtures ────────────────────────────────────────
@@ -846,5 +858,182 @@ describe('createTransformContext', () => {
     expect(fileParts[0]!.filename).toBe('tool-image-tc-ss-0.jpg');
     expect(fileParts[0]!.mediaType).toBe('image/jpeg');
     expect(fileParts[0]!.data).toBe('base64screenshotdata');
+  });
+});
+
+// ── Workspace rules: criticalRules passed to compaction ──
+
+describe('createTransformContext — workspace rules', () => {
+  const mockCompact = vi.mocked(compactMessagesWithSummary);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCompact.mockResolvedValue({
+      messages: [],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+  });
+
+  it('passes criticalRules to compactMessagesWithSummary', async () => {
+    const { getEnabledWorkspaceFiles } = await import('@extension/storage');
+    const mockGetFiles = vi.mocked(getEnabledWorkspaceFiles);
+    mockGetFiles.mockResolvedValueOnce([
+      { id: 'ws-1', name: 'AGENTS.md', content: '## Red Lines\nNever do X\n## Other\nEnd', enabled: true, owner: 'user', predefined: true, createdAt: 0, updatedAt: 0, agentId: 'main' },
+    ] as any);
+
+    const { extractCriticalRules } = await import('./summarizer');
+    const mockExtract = vi.mocked(extractCriticalRules);
+    mockExtract.mockReturnValueOnce('Red Lines\nNever do X');
+
+    mockCompact.mockResolvedValueOnce({
+      messages: [{ id: 'msg-1', chatId: 'chat-1', role: 'user', parts: [{ type: 'text', text: 'Hello' }], createdAt: Date.now() }],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+
+    const { transformContext } = createTransformContext({ ...defaultOpts, agentId: 'main' });
+    await transformContext([makeAgentUserMessage('Hello')]);
+
+    // extractCriticalRules should have been called with the workspace files
+    expect(mockExtract).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'AGENTS.md' }),
+      ]),
+    );
+
+    // The criticalRules returned by extractCriticalRules should be passed to compactMessagesWithSummary
+    const options = mockCompact.mock.calls[0]![3];
+    expect(options).toBeDefined();
+    expect(options!.criticalRules).toBe('Red Lines\nNever do X');
+  });
+});
+
+// ── Phase 5C: CompactionConfig threading ──
+
+describe('createTransformContext — compaction config', () => {
+  const mockCompact = vi.mocked(compactMessagesWithSummary);
+  const mockGetAgent = vi.mocked(getAgent);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCompact.mockResolvedValue({
+      messages: [],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+  });
+
+  it('passes agent compactionConfig to compactMessagesWithSummary', async () => {
+    mockGetAgent.mockResolvedValueOnce({
+      id: 'agent-1',
+      name: 'Test',
+      identity: {},
+      isDefault: true,
+      compactionConfig: { maxHistoryShare: 0.3, qualityGuardEnabled: false },
+      createdAt: 0,
+      updatedAt: 0,
+    } as any);
+
+    mockCompact.mockResolvedValueOnce({
+      messages: [{ id: 'msg-1', chatId: 'chat-1', role: 'user', parts: [{ type: 'text', text: 'Hello' }], createdAt: Date.now() }],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+
+    const { transformContext } = createTransformContext({ ...defaultOpts, agentId: 'agent-1' });
+    await transformContext([makeAgentUserMessage('Hello')]);
+
+    const options = mockCompact.mock.calls[0]![3];
+    expect(options).toBeDefined();
+    expect(options!.compactionConfig).toEqual(
+      expect.objectContaining({ maxHistoryShare: 0.3, qualityGuardEnabled: false }),
+    );
+  });
+
+  it('passes undefined compactionConfig when agent has no config', async () => {
+    mockGetAgent.mockResolvedValueOnce({
+      id: 'agent-1',
+      name: 'Test',
+      identity: {},
+      isDefault: true,
+      createdAt: 0,
+      updatedAt: 0,
+    } as any);
+
+    mockCompact.mockResolvedValueOnce({
+      messages: [{ id: 'msg-1', chatId: 'chat-1', role: 'user', parts: [{ type: 'text', text: 'Hello' }], createdAt: Date.now() }],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+
+    const { transformContext } = createTransformContext({ ...defaultOpts, agentId: 'agent-1' });
+    await transformContext([makeAgentUserMessage('Hello')]);
+
+    const options = mockCompact.mock.calls[0]![3];
+    expect(options!.compactionConfig).toBeUndefined();
+  });
+});
+
+// ── Phase 6: Compaction metadata persistence ──
+
+describe('createTransformContext — compaction metadata', () => {
+  const mockCompact = vi.mocked(compactMessagesWithSummary);
+  const mockUpdateMetadata = vi.mocked(updateCompactionMetadata);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCompact.mockResolvedValue({
+      messages: [],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+  });
+
+  it('updates chat record with compaction metadata when compaction occurs', async () => {
+    mockCompact.mockResolvedValueOnce({
+      messages: [
+        { id: 'msg-1', chatId: 'chat-1', role: 'user', parts: [{ type: 'text', text: 'Hello' }], createdAt: Date.now() },
+      ],
+      wasCompacted: true,
+      compactionMethod: 'summary',
+      summary: 'A summary',
+    });
+
+    const { transformContext } = createTransformContext(defaultOpts);
+    await transformContext([
+      makeAgentUserMessage('Hello'),
+      makeAgentAssistantMessage('Response'),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(mockUpdateMetadata).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+        compactionMethod: 'summary',
+        compactionTokensBefore: expect.any(Number),
+        compactionTokensAfter: expect.any(Number),
+      }));
+    });
+  });
+
+  it('does not update metadata when no compaction occurred', async () => {
+    mockCompact.mockResolvedValueOnce({
+      messages: [
+        { id: 'msg-1', chatId: 'chat-1', role: 'user', parts: [{ type: 'text', text: 'Hello' }], createdAt: Date.now() },
+      ],
+      wasCompacted: false,
+      compactionMethod: 'none',
+      summary: undefined,
+    });
+
+    const { transformContext } = createTransformContext(defaultOpts);
+    await transformContext([makeAgentUserMessage('Hello')]);
+
+    expect(mockUpdateMetadata).not.toHaveBeenCalled();
   });
 });

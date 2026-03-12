@@ -8,6 +8,8 @@ type ContextStatusBadgeProps = {
   totalTokens: number;
   compactionCount: number;
   contextLimit: number;
+  lastCompactionMethod?: string;
+  lastCompactionTokensSaved?: number;
 };
 
 const formatTokenCount = (n: number): string => {
@@ -22,6 +24,8 @@ const ContextStatusBadge = ({
   totalTokens,
   compactionCount,
   contextLimit,
+  lastCompactionMethod,
+  lastCompactionTokensSaved,
 }: ContextStatusBadgeProps) => {
   const ratio = useMemo(
     () => (contextLimit > 0 ? Math.min(totalTokens / contextLimit, 1) : 0),
@@ -81,6 +85,18 @@ const ContextStatusBadge = ({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Compactions</span>
               <span className="font-mono">{compactionCount}</span>
+            </div>
+          )}
+          {lastCompactionMethod && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Last method</span>
+              <span className="font-mono">{lastCompactionMethod}</span>
+            </div>
+          )}
+          {lastCompactionTokensSaved != null && lastCompactionTokensSaved > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tokens saved</span>
+              <span className="font-mono">~{formatTokenCount(lastCompactionTokensSaved)}</span>
             </div>
           )}
         </div>
