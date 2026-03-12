@@ -371,6 +371,7 @@ MIT — see [LICENSE](LICENSE).
 - [Baileys](https://github.com/WhiskeySockets/Baileys) (`packages/baileys/`) — TypeScript/JavaScript API for WhatsApp Web by WhiskeySockets. Licensed under the [MIT License](https://github.com/WhiskeySockets/Baileys/blob/master/LICENSE).
 - [Vercel AI Chatbot](https://github.com/vercel/chatbot) — Chat UI components and patterns. Licensed under the [Apache License 2.0](https://github.com/vercel/chatbot/blob/main/LICENSE).
 - [Chrome Extension Boilerplate React Vite](https://github.com/nicedreamdo/nicedreamdo) — Extension scaffolding with React, Vite, and Turborepo by nicedreamdo. Licensed under the [MIT License](https://github.com/nicedreamdo/nicedreamdo/blob/main/LICENSE).
+- [OpenClaw](https://github.com/openclaw/openclaw) — Open-source AI agent platform that inspired ChromeClaw's architecture and capabilities.
 
 ## Star History
 
