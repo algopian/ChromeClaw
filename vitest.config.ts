@@ -35,6 +35,7 @@ export default defineConfig({
         'chrome-extension/src/background/agents/stream-handler.ts',
         'chrome-extension/src/background/agents/message-adapter.ts',
         'chrome-extension/src/background/agents/model-adapter.ts',
+        'chrome-extension/src/background/agents/model-compat.ts',
         'chrome-extension/src/background/agents/stream-bridge.ts',
         // local-llm-bridge.ts excluded — Chrome runtime messaging IPC with offscreen document,
         // relies on chrome.runtime.onMessage listeners. Tested via E2E tests.

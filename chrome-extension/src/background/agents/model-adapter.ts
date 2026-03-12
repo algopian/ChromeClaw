@@ -6,6 +6,7 @@
 import { getModelContextLimit } from '@extension/shared';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type { ChatModel } from '@extension/shared';
+import { normalizeModelCompat } from './model-compat';
 
 interface ResolvedModel {
   model: Model<Api>;
@@ -79,7 +80,7 @@ export const chatModelToPiModel = (config: ChatModel): ResolvedModel => {
     ?? (config.provider === 'local' ? 4096 : getModelContextLimit(config.id));
 
   return {
-    model: {
+    model: normalizeModelCompat({
       id: config.id,
       name: config.name,
       api,
@@ -90,7 +91,7 @@ export const chatModelToPiModel = (config: ChatModel): ResolvedModel => {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow,
       maxTokens: Math.floor(contextWindow * 0.25),
-    },
+    }),
     apiKey,
   };
 };
