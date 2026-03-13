@@ -256,7 +256,6 @@ ChromeClaw can send and receive messages on WhatsApp and Telegram. Channel worke
 - **Connection**: QR code pairing via Baileys WebSocket client
 - **Auth storage**: Credentials persisted in `chrome.storage.local`
 - **Sender control**: `allowedSenderIds` allowlist, `acceptFromMe` / `acceptFromOthers` flags
-- **Per-channel model**: Assign a specific model to handle WhatsApp conversations
 - **Voice messages**: Inbound audio is decrypted and transcribed via STT; outbound TTS replies are sent as PTT voice messages
 - **Message limits**: Long messages are auto-split at 4096 characters
 
@@ -264,8 +263,6 @@ ChromeClaw can send and receive messages on WhatsApp and Telegram. Channel worke
 
 - **Connection**: Bot token with HTTP long-polling (25s poll timeout)
 - **Sender control**: `allowedSenderIds` allowlist
-- **Per-channel model**: Assign a specific model to handle Telegram conversations
-- **Rate limiting**: Automatic retry on 429/409 responses
 
 Both channels are configured on the Options page under the Channels section.
 
@@ -356,10 +353,8 @@ CLI flags (set on the command line):
 
 ## Known Limitations
 
-- **Side panel width** — Chrome enforces a fixed side panel width; the UI is constrained to ~400px
 - **MV3 service worker idle** — The background service worker may be terminated after 30s of inactivity; long-running streams use keep-alive mechanisms
-- **No Pyodide** — Code execution in the browser is not supported; code artifacts are display-only
-- **Local LLM performance** — On-device inference speed depends on hardware; WebGPU is preferred over WASM for acceptable throughput
+- **Local LLM performance** — On-device inference speed depends on hardware
 - **WhatsApp connection** — Requires a persistent offscreen document to maintain the Baileys WebSocket connection; Chrome may reclaim the offscreen document under memory pressure
 
 ## License
