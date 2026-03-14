@@ -149,6 +149,8 @@ const Step1ModelSetup = ({
   const [baseUrl, setBaseUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [supportsTools, setSupportsTools] = useState(true);
+  const [supportsReasoning, setSupportsReasoning] = useState(true);
 
   const handleProviderChange = useCallback((value: string) => {
     setProvider(value);
@@ -184,8 +186,8 @@ const Step1ModelSetup = ({
           routingMode: 'direct',
           apiKey: apiKey || undefined,
           baseUrl: baseUrl || undefined,
-          supportsTools: true,
-          supportsReasoning: true,
+          supportsTools,
+          supportsReasoning,
         },
       ]);
       onNext();
@@ -194,7 +196,7 @@ const Step1ModelSetup = ({
     } finally {
       setSaving(false);
     }
-  }, [apiKey, modelId, provider, baseUrl, onNext, t]);
+  }, [apiKey, modelId, provider, baseUrl, supportsTools, supportsReasoning, onNext, t]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -289,6 +291,29 @@ const Step1ModelSetup = ({
           <p className="text-muted-foreground text-xs">{t('firstRun_baseUrlHint')}</p>
         </div>
 
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm" htmlFor="setup-supports-tools">
+            <input
+              checked={supportsTools}
+              className="accent-primary size-4"
+              id="setup-supports-tools"
+              onChange={e => setSupportsTools(e.target.checked)}
+              type="checkbox"
+            />
+            {t('model_supportsTools')}
+          </label>
+          <label className="flex items-center gap-2 text-sm" htmlFor="setup-supports-reasoning">
+            <input
+              checked={supportsReasoning}
+              className="accent-primary size-4"
+              id="setup-supports-reasoning"
+              onChange={e => setSupportsReasoning(e.target.checked)}
+              type="checkbox"
+            />
+            {t('model_supportsReasoning')}
+          </label>
+        </div>
+
         <Button
           className="w-full"
           data-testid="setup-start-button"
@@ -320,6 +345,7 @@ const Step2ChannelSetup = ({
   const [botUsername, setBotUsername] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [enableChannel, setEnableChannel] = useState(true);
 
   const handleValidate = useCallback(async () => {
     if (!botToken.trim()) return;
@@ -366,13 +392,20 @@ const Step2ChannelSetup = ({
           allowedSenderIds: userIds,
         },
       });
+      if (enableChannel) {
+        await chrome.runtime.sendMessage({
+          type: 'CHANNEL_TOGGLE',
+          channelId: 'telegram',
+          enabled: true,
+        });
+      }
       onNext();
     } catch {
       setError(t('telegram_saveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [botToken, allowedUsers, botUsername, onNext, onSkip, t]);
+  }, [botToken, allowedUsers, botUsername, enableChannel, onNext, onSkip, t]);
 
   return (
     <>
@@ -429,6 +462,18 @@ const Step2ChannelSetup = ({
             value={allowedUsers}
           />
         </div>
+
+        <label className="flex items-center gap-2 text-sm" htmlFor="setup-enable-channel">
+          <input
+            checked={enableChannel}
+            className="accent-primary size-4"
+            disabled={!validated || !allowedUsers.trim()}
+            id="setup-enable-channel"
+            onChange={e => setEnableChannel(e.target.checked)}
+            type="checkbox"
+          />
+          {t('telegram_enableBot')}
+        </label>
 
         <p className="text-muted-foreground text-xs">{t('firstRun_whatsappNote')}</p>
 
