@@ -2,7 +2,7 @@
 // web_fetch tool — fetch and extract content from a URL.
 // ---------------------------------------------------------------------------
 
-import { normalizeCacheKey, readCache, writeCache, withTimeout } from './web-shared';
+import { normalizeCacheKey, readCache, readResponseText, writeCache, withTimeout } from './web-shared';
 import { createLogger } from '../logging/logger-buffer';
 import { Type } from '@sinclair/typebox';
 import type { CacheEntry } from './web-shared';
@@ -50,6 +50,7 @@ interface WebFetchResult {
   sizeBytes?: number;
   isBase64?: boolean;
   error?: string;
+  browserFallback?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +155,84 @@ const extractText = (html: string, maxChars: number): string => {
 };
 
 // ---------------------------------------------------------------------------
+// Browser fallback — open a background tab to extract text when fetch() fails
+// ---------------------------------------------------------------------------
+
+const FALLBACK_LOAD_TIMEOUT_MS = 15_000;
+
+const waitForTabLoad = (tabId: number, timeoutMs = FALLBACK_LOAD_TIMEOUT_MS): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      fn();
+    };
+    const timer = setTimeout(
+      () => settle(() => reject(new Error(`Tab load timed out after ${timeoutMs}ms`))),
+      timeoutMs,
+    );
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
+      if (id === tabId && info.status === 'complete') settle(resolve);
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    // Check if already complete (race: page loaded before listener attached)
+    chrome.tabs.get(tabId).then(tab => {
+      if (tab.status === 'complete') settle(resolve);
+    }).catch(() => { /* tab gone — timeout will handle */ });
+  });
+
+const fetchViaBrowserFallback = async (url: string, maxChars: number): Promise<WebFetchResult> => {
+  log.trace('[webFetch] attempting browser fallback', { url });
+
+  // Only allow http/https — block chrome://, file://, extension-internal, etc.
+  const parsedUrl = new URL(url);
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    return { text: '', status: 0, error: `Browser fallback skipped: unsupported protocol ${parsedUrl.protocol}`, browserFallback: true };
+  }
+
+  // Chrome blocks all extension scripting on these domains — skip the tab round-trip.
+  const BLOCKED_HOSTS = ['chromewebstore.google.com', 'chrome.google.com', 'clients.google.com'];
+  if (BLOCKED_HOSTS.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith(`.${h}`))) {
+    return {
+      text: '', status: 0, browserFallback: true,
+      error: `This URL is on a Chrome-restricted domain that blocks all extension access. Use web_search to find information about this page instead.`,
+    };
+  }
+
+  let tabId: number | undefined;
+  try {
+    const tab = await chrome.tabs.create({ url, active: false });
+    tabId = tab.id ?? undefined;
+    if (tabId == null) {
+      return { text: '', status: 0, error: 'Browser fallback failed: could not create tab.', browserFallback: true };
+    }
+    await waitForTabLoad(tabId);
+    const loadedTab = await chrome.tabs.get(tabId);
+    const title = loadedTab.title || undefined;
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => document.body.innerText,
+    });
+    const raw = results?.[0]?.result;
+    let text = typeof raw === 'string' ? raw : '';
+    if (text.length > maxChars) {
+      text = text.slice(0, maxChars);
+    }
+    return { text, title, status: 200, browserFallback: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { text: '', status: 0, error: `Browser fallback failed: ${msg}`, browserFallback: true };
+  } finally {
+    if (tabId != null) {
+      try { await chrome.tabs.remove(tabId); } catch { /* tab may already be closed */ }
+    }
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Executor
 // ---------------------------------------------------------------------------
 
@@ -172,11 +251,56 @@ const executeWebFetch = async (args: WebFetchArgs): Promise<WebFetchResult> => {
     }
   }
 
+  // Validate URL before attempting fetch
+  try {
+    new URL(url);
+  } catch {
+    return { text: '', status: 0, error: `Invalid URL: "${url}". Ensure the URL includes a protocol (e.g., https://).` };
+  }
+
   const fetchInit: RequestInit = { signal: withTimeout(30) };
   if (method) fetchInit.method = method;
   if (body) fetchInit.body = body;
   if (headers) fetchInit.headers = headers;
-  const response = await fetch(url, fetchInit);
+
+  let response: Response;
+  try {
+    response = await fetch(url, fetchInit);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isTimeout = (err instanceof DOMException && (err.name === 'AbortError' || err.name === 'TimeoutError'))
+      || msg.includes('aborted') || msg.includes('timeout');
+
+    log.trace('[webFetch] fetch failed', { url, error: msg });
+
+    if (isTimeout) {
+      return { text: '', status: 0, error: 'Request timed out after 30 seconds. The server may be slow or unreachable.' };
+    }
+
+    // CORS/network error — try browser fallback for GET text/html requests
+    if (!isPost && extractMode !== 'binary') {
+      const fallbackResult = await fetchViaBrowserFallback(url, maxChars);
+      if (fallbackResult.text.length > 0) {
+        writeCache(FETCH_CACHE, cacheKey, fallbackResult);
+        return fallbackResult;
+      }
+      return {
+        text: '', status: 0, browserFallback: true,
+        error: `Network error: ${msg}. Browser fallback also failed: ${fallbackResult.error ?? 'no content extracted'}`,
+      };
+    }
+
+    // POST/binary — no fallback available
+    return { text: '', status: 0, error: `Network error: ${msg}. Possible causes: CORS policy blocking the request, SSL/TLS error, DNS resolution failure, or the server is unreachable. Try using the browser tool to navigate to the URL instead.` };
+  }
+
+  // Handle non-2xx responses for binary mode early (no useful content to extract)
+  if (!response.ok && extractMode === 'binary') {
+    const errorBody = await readResponseText(response);
+    const detail = `HTTP ${response.status} ${response.statusText}${errorBody ? `: ${errorBody}` : ''}`;
+    log.trace('[webFetch] non-OK response', { url, status: response.status });
+    return { text: '', status: response.status, error: detail };
+  }
 
   // ── Binary mode: return base64 data URI ──
   if (extractMode === 'binary') {
@@ -253,6 +377,12 @@ const executeWebFetch = async (args: WebFetchArgs): Promise<WebFetchResult> => {
 
   const result: WebFetchResult = { text, title, status: response.status };
 
+  // Flag non-2xx responses with error detail while preserving extracted content
+  if (!response.ok) {
+    result.error = `HTTP ${response.status} ${response.statusText}`;
+    log.trace('[webFetch] non-OK response', { url, status: response.status });
+  }
+
   // Cache successful text results (skip for POST — non-idempotent)
   if (!isPost && response.ok && text.length > 0) {
     writeCache(FETCH_CACHE, cacheKey, result);
@@ -261,7 +391,7 @@ const executeWebFetch = async (args: WebFetchArgs): Promise<WebFetchResult> => {
   return result;
 };
 
-export { webFetchSchema, executeWebFetch, FETCH_CACHE, extractText, decodeEntities };
+export { webFetchSchema, executeWebFetch, FETCH_CACHE, extractText, decodeEntities, uint8ToBase64 };
 export type { WebFetchArgs, WebFetchResult };
 
 // ── Tool registration ──

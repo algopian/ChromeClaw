@@ -6,7 +6,7 @@ import { resolveDefaultModel, runAgent } from '../agents/agent-setup';
 import { createLogger } from '../logging/logger-buffer';
 import { createKeepAliveManager } from '../utils/keep-alive';
 import { buildSystemPrompt, resolveToolPromptHints, resolveToolListings } from '@extension/shared';
-import { addMessage } from '@extension/storage';
+import { addMessage, saveArtifact } from '@extension/storage';
 import { Type } from '@sinclair/typebox';
 import { nanoid } from 'nanoid';
 import type { ToolRegistration } from './tool-registration';
@@ -152,6 +152,8 @@ interface ToolContext {
 interface SpawnSubagentOptions {
   /** Clean display label for progress/result messages (defaults to args.task). */
   label?: string;
+  /** Save findings as an artifact for document preview in the UI. */
+  createArtifact?: boolean;
   /** Called after agent completes, before result injection. Can modify findings. */
   onComplete?: (ctx: {
     responseText: string;
@@ -375,9 +377,31 @@ const runSubagentBackground = async (
       }
     }
 
+    // Save findings as an artifact so the UI can render a document preview
+    let artifactId: string | undefined;
+    if (chatId && findings && options?.createArtifact) {
+      try {
+        artifactId = nanoid();
+        const now = Date.now();
+        await saveArtifact({
+          id: artifactId,
+          chatId,
+          title: displayTask,
+          kind: 'text',
+          content: findings,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } catch (err) {
+        log.error('Failed to save subagent artifact', { runId: run.runId, error: String(err) });
+        artifactId = undefined;
+      }
+    }
+
     // Inject system message into chat history so the LLM sees the result on next turn
     if (chatId) {
       log.trace('Subagent injecting system message', { runId: run.runId, chatId });
+      const artifactTag = artifactId ? ` artifactId=${artifactId}` : '';
       await addMessage({
         id: nanoid(),
         chatId,
@@ -385,7 +409,7 @@ const runSubagentBackground = async (
         parts: [
           {
             type: 'text',
-            text: `[subagent-result runId=${run.runId}]\n\nTask: ${displayTask}\n\n${findings}`,
+            text: `[subagent-result runId=${run.runId}${artifactTag}]\n\nTask: ${displayTask}\n\n${findings}`,
           },
         ],
         createdAt: Date.now(),
@@ -401,6 +425,7 @@ const runSubagentBackground = async (
           task: displayTask,
           findings,
           startedAt: run.startedAt,
+          artifactId,
         })
         .catch(err =>
           log.trace('Progress broadcast failed', {
