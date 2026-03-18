@@ -36,7 +36,6 @@ const mockExecuteScript = vi.fn(
 
 const mockTabsCreate = vi.fn(() => Promise.resolve({ id: SANDBOX_TAB_ID } as chrome.tabs.Tab));
 const mockTabsGet = vi.fn(() => Promise.resolve({ id: SANDBOX_TAB_ID } as chrome.tabs.Tab));
-const mockTabsQuery = vi.fn(() => Promise.resolve([] as chrome.tabs.Tab[]));
 
 const tabsOnRemovedListeners: Array<(tabId: number) => void> = [];
 
@@ -45,7 +44,6 @@ Object.defineProperty(globalThis, 'chrome', {
     tabs: {
       create: mockTabsCreate,
       get: mockTabsGet,
-      query: mockTabsQuery,
       onRemoved: {
         addListener: (fn: (tabId: number) => void) => {
           tabsOnRemovedListeners.push(fn);
@@ -142,7 +140,7 @@ describe('sandbox tab lifecycle', () => {
   it('creates sandbox tab on first call', async () => {
     await executeCodeFirefox('return 1');
     expect(mockTabsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'https://example.com', active: false }),
+      expect.objectContaining({ url: 'about:blank', active: false }),
     );
   });
 
@@ -162,21 +160,6 @@ describe('sandbox tab lifecycle', () => {
 
     await executeCodeFirefox('return 3');
     expect(mockTabsCreate).toHaveBeenCalledTimes(2);
-  });
-
-  it('reuses orphan sandbox tab from previous SW lifecycle', async () => {
-    const ORPHAN_TAB_ID = 777;
-    // Return an existing sandbox tab from tabs.query
-    mockTabsQuery.mockResolvedValueOnce([{ id: ORPHAN_TAB_ID } as chrome.tabs.Tab]);
-
-    await executeCodeFirefox('return 42');
-
-    // Should NOT have called tabs.create since it reused the orphan
-    expect(mockTabsCreate).not.toHaveBeenCalled();
-    // Should have executed on the orphan tab
-    expect(mockExecuteScript).toHaveBeenCalledWith(
-      expect.objectContaining({ target: { tabId: ORPHAN_TAB_ID } }),
-    );
   });
 });
 

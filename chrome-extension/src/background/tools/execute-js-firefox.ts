@@ -28,19 +28,11 @@ const registerTabListener = () => {
   });
 };
 
-const SANDBOX_URL = 'https://example.com';
-
 const createSandboxTabFirefox = async (): Promise<number> => {
-  // Use example.com instead of sandbox.html — Firefox blocks eval() on extension
-  // pages due to browser-enforced CSP. about:blank allows eval() but blocks IndexedDB.
-  // example.com has a permissive CSP and a real origin, so both eval() and IndexedDB work.
-  const tabs = await chrome.tabs.query({ url: `${SANDBOX_URL}/*` });
-  if (tabs.length > 0 && tabs[0].id != null) {
-    sandboxTabId = tabs[0].id;
-    return sandboxTabId;
-  }
-
-  const tab = await chrome.tabs.create({ url: SANDBOX_URL, active: false });
+  // Use about:blank — Firefox blocks eval() on extension pages (sandbox.html)
+  // due to browser-enforced CSP. about:blank has no CSP restrictions.
+  // No orphan tab reuse since about:blank would match unrelated tabs.
+  const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
   sandboxTabId = tab.id!;
   return sandboxTabId;
 };
