@@ -91,6 +91,8 @@ interface DbChatModel {
   toolTimeoutSeconds?: number;
   /** Context window size in tokens. Overrides the built-in lookup when set. */
   contextWindow?: number;
+  /** Azure OpenAI API version (e.g. '2025-04-01-preview'). Only used with azure provider. */
+  azureApiVersion?: string;
 }
 
 /** DB-level memory chunk for BM25 search */

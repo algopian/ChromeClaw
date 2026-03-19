@@ -17,7 +17,7 @@ import { dbModelToChatModel, runAgent } from '../agents/agent-setup';
 import { sanitizeHistory } from '../context/history-sanitization';
 import { createLogger } from '../logging/logger-buffer';
 import { resolveTranscription } from '../media-understanding';
-import { chatMessagesToPiMessages, convertToLlm } from '../agents/message-adapter';
+import { chatMessagesToPiMessages, makeConvertToLlm } from '../agents/message-adapter';
 import { createTransformContext } from '../context/transform';
 import { maybeApplyTtsBatchedStream } from '../tts';
 import { getToolConfig, getImplementedToolNames } from '../tools';
@@ -377,7 +377,7 @@ const handleChannelMessageInner = async (
           systemPrompt,
           prompt: promptMessage,
           messages: historyMessages,
-          convertToLlm,
+          convertToLlm: makeConvertToLlm(model),
           transformContext,
           chatId: chat.id,
           onTextDelta: delta => {

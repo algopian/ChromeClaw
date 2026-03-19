@@ -56,6 +56,8 @@ const defaultModelIds: Record<string, string> = {
   google: 'gemini-2.0-flash',
   openrouter: 'openai/gpt-4o',
   custom: '',
+  azure: '',
+  'openai-codex': 'gpt-5.3-codex',
   local: 'onnx-community/Qwen3-0.6B-ONNX',
 };
 
@@ -71,6 +73,7 @@ const emptyForm: ModelFormData = {
   api: undefined,
   toolTimeoutSeconds: undefined,
   contextWindow: undefined,
+  azureApiVersion: undefined,
 };
 
 const apiOptions = [
@@ -85,6 +88,8 @@ const providers = [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'google', label: 'Google' },
   { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'azure', label: 'Azure OpenAI' },
+  { value: 'openai-codex', label: 'OpenAI Codex (ChatGPT)' },
   { value: 'custom', label: 'OpenAI Compatible' },
   ...(WEBGPU_MODELS_ENABLED ? [{ value: 'local', label: 'WebGPU (On-Device)' }] : []),
 ];
@@ -96,6 +101,15 @@ const validateModelForm = (form: ModelFormData): string | null => {
   if (!form.modelId.trim()) return t('firstRun_modelIdRequired');
   if (!form.provider) return t('model_providerRequired');
   if (form.provider === 'local') return null; // No API key or base URL needed
+  if (form.provider === 'openai-codex') {
+    if (!form.apiKey?.trim()) return 'ChatGPT OAuth token is required';
+    return null;
+  }
+  if (form.provider === 'azure') {
+    if (!form.baseUrl?.trim()) return 'Azure endpoint URL is required';
+    if (!form.apiKey?.trim()) return t('firstRun_apiKeyRequired');
+    return form.baseUrl && !/^https?:\/\/.+/.test(form.baseUrl) ? t('model_baseUrlInvalid') : null;
+  }
   if (!form.apiKey?.trim() && !form.baseUrl?.trim())
     return t('firstRun_apiKeyRequired');
   if (form.baseUrl && !/^https?:\/\/.+/.test(form.baseUrl))
@@ -228,8 +242,19 @@ const ModelConfig = () => {
           next.modelId = defaultModelIds[value] ?? '';
         }
         // Clear api when switching to non-OpenAI-compatible providers
-        if (!['openai', 'custom', 'openrouter'].includes(value)) {
+        if (!['openai', 'custom', 'openrouter', 'azure'].includes(value)) {
           next.api = undefined;
+        }
+        // Azure provider: set Responses API as default
+        if (value === 'azure') {
+          next.api = 'openai-responses';
+        }
+        // Codex provider: defaults
+        if (value === 'openai-codex') {
+          next.api = undefined; // Always openai-codex-responses, no user choice
+          next.baseUrl = 'https://chatgpt.com/backend-api';
+          next.supportsReasoning = true;
+          next.supportsTools = true;
         }
         // Force local provider defaults
         if (value === 'local') {
@@ -267,6 +292,9 @@ const ModelConfig = () => {
         : undefined,
       contextWindow: editForm.contextWindow
         ? Math.max(Number(editForm.contextWindow), 1024)
+        : undefined,
+      azureApiVersion: editForm.provider === 'azure' && editForm.azureApiVersion
+        ? editForm.azureApiVersion.trim()
         : undefined,
     };
 
@@ -385,6 +413,7 @@ const ModelConfig = () => {
   );
 
   const isLocal = editForm.provider === 'local';
+  const isCodex = editForm.provider === 'openai-codex';
 
   return (
     <Card>
@@ -585,29 +614,62 @@ const ModelConfig = () => {
                 <>
                   <div className="grid gap-2">
                     <Label htmlFor="model-apikey">
-                      {editForm.baseUrl ? t('firstRun_apiKeyOptional') : t('firstRun_apiKey')}
+                      {isCodex
+                        ? 'OAuth Token'
+                        : editForm.baseUrl
+                          ? t('firstRun_apiKeyOptional')
+                          : t('firstRun_apiKey')}
                     </Label>
                     <Input
                       id="model-apikey"
                       onChange={e => handleFormChange('apiKey', e.target.value)}
-                      placeholder="sk-..."
+                      placeholder={isCodex ? 'ChatGPT OAuth access token' : 'sk-...'}
                       type="password"
                       value={editForm.apiKey ?? ''}
                     />
+                    {isCodex && (
+                      <p className="text-muted-foreground text-xs">
+                        Requires a ChatGPT OAuth token (JWT). This is the access_token from a ChatGPT
+                        session, not a standard OpenAI API key.
+                      </p>
+                    )}
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="model-baseurl">{t('firstRun_baseUrl')}</Label>
-                    <Input
-                      id="model-baseurl"
-                      onChange={e => handleFormChange('baseUrl', e.target.value)}
-                      placeholder="https://api.openai.com/v1"
-                      type="url"
-                      value={editForm.baseUrl ?? ''}
-                    />
-                  </div>
+                  {!isCodex && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="model-baseurl">
+                        {editForm.provider === 'azure' ? 'Azure Endpoint' : t('firstRun_baseUrl')}
+                      </Label>
+                      <Input
+                        id="model-baseurl"
+                        onChange={e => handleFormChange('baseUrl', e.target.value)}
+                        placeholder={
+                          editForm.provider === 'azure'
+                            ? 'https://{resource}.openai.azure.com/openai'
+                            : 'https://api.openai.com/v1'
+                        }
+                        type="url"
+                        value={editForm.baseUrl ?? ''}
+                      />
+                    </div>
+                  )}
 
-                  {['openai', 'custom', 'openrouter'].includes(editForm.provider) && (
+                  {editForm.provider === 'azure' && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="model-azure-api-version">API Version</Label>
+                      <Input
+                        id="model-azure-api-version"
+                        onChange={e => handleFormChange('azureApiVersion', e.target.value)}
+                        placeholder="2025-04-01-preview"
+                        value={editForm.azureApiVersion ?? ''}
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        Azure OpenAI API version. Defaults to 2025-04-01-preview if empty.
+                      </p>
+                    </div>
+                  )}
+
+                  {['openai', 'custom', 'openrouter', 'azure'].includes(editForm.provider) && (
                     <div className="grid gap-2">
                       <Label htmlFor="model-api">{t('model_apiFormat')}</Label>
                       <Select

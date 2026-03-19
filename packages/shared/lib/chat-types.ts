@@ -8,7 +8,7 @@ type ToolPartState = 'input-streaming' | 'input-available' | 'output-available' 
 /** A single part of a chat message */
 type ChatMessagePart =
   | { type: 'text'; text: string }
-  | { type: 'reasoning'; text: string }
+  | { type: 'reasoning'; text: string; signature?: string }
   | {
       type: 'tool-call';
       toolCallId: string;
@@ -97,13 +97,13 @@ interface SessionUsage {
 }
 
 /** Provider identifiers */
-type ModelProvider = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'custom' | 'local';
+type ModelProvider = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'custom' | 'azure' | 'openai-codex' | 'local';
 
 /** Routing mode for model requests */
 type RoutingMode = 'direct';
 
 /** API protocol for OpenAI-compatible providers */
-type ModelApi = 'openai-completions' | 'openai-responses' | 'openai-codex-responses';
+type ModelApi = 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'azure-openai-responses';
 
 /** Model configuration */
 interface ChatModel {
@@ -121,6 +121,8 @@ interface ChatModel {
   toolTimeoutSeconds?: number;
   /** Context window size in tokens. Overrides the built-in lookup when set. */
   contextWindow?: number;
+  /** Azure OpenAI API version (e.g. '2025-04-01-preview'). Only used with azure provider. */
+  azureApiVersion?: string;
 }
 
 /** Tool definition (metadata only — no execute function) */

@@ -17,6 +17,42 @@ import type { ChatModel } from '@extension/shared';
 const bridgeLog = createLogger('stream');
 
 /**
+ * Install a global fetch interceptor that appends `api-version` to Azure OpenAI
+ * requests. Azure requires this query parameter but the standard OpenAI SDK client
+ * doesn't add it. We use the standard client (not AzureOpenAI) because Azure
+ * endpoints accept Bearer token auth, which AzureOpenAI replaces with api-key header.
+ *
+ * The interceptor is idempotent — it only modifies Azure URLs that don't already
+ * have the `api-version` parameter, and has zero effect on non-Azure requests.
+ */
+let _azureApiVersion: string | undefined;
+
+const setAzureApiVersion = (version: string | undefined): void => {
+  _azureApiVersion = version;
+};
+
+const _originalFetch = globalThis.fetch;
+globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  if (_azureApiVersion) {
+    try {
+      const urlStr =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const url = new URL(urlStr);
+      if (url.hostname.endsWith('.openai.azure.com') && !url.searchParams.has('api-version')) {
+        url.searchParams.set('api-version', _azureApiVersion);
+        if (typeof input === 'string' || input instanceof URL) {
+          return _originalFetch(url.toString(), init);
+        }
+        return _originalFetch(new Request(url.toString(), input), init);
+      }
+    } catch {
+      // URL parse failed, pass through
+    }
+  }
+  return _originalFetch(input, init);
+};
+
+/**
  * Create a StreamFn using pi-mono's native streaming.
  * For cloud providers, streamSimple() already returns AssistantMessageEventStream.
  * For local models, routes to the offscreen document via local-llm-bridge.
@@ -122,7 +158,7 @@ export const createStreamFn = (modelConfig: ChatModel): StreamFn => {
     };
   }
 
-  const { model, apiKey } = chatModelToPiModel(modelConfig);
+  const { model, apiKey, azureApiVersion } = chatModelToPiModel(modelConfig);
 
   return (_model: Model<any>, context: Context, options?: SimpleStreamOptions) => {
     bridgeLog.trace('Provider call', {
@@ -134,6 +170,8 @@ export const createStreamFn = (modelConfig: ChatModel): StreamFn => {
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
     });
+    // Set Azure api-version for the fetch interceptor (if applicable)
+    setAzureApiVersion(azureApiVersion);
     return streamSimple(model, context, { ...options, apiKey });
   };
 };
@@ -154,7 +192,8 @@ export const completeText = async (
     );
   }
 
-  const { model, apiKey } = chatModelToPiModel(modelConfig);
+  const { model, apiKey, azureApiVersion } = chatModelToPiModel(modelConfig);
+  setAzureApiVersion(azureApiVersion);
   const context: Context = {
     systemPrompt,
     messages: [{ role: 'user', content: userContent, timestamp: Date.now() }],

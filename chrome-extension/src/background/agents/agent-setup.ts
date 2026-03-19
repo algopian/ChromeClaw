@@ -244,6 +244,12 @@ const executeAttempt = async (opts: {
             if (c.type === 'text' && c.text) {
               allAssistantParts.push({ type: 'text', text: c.text });
               lastStepText = c.text;
+            } else if (c.type === 'thinking') {
+              allAssistantParts.push({
+                type: 'reasoning',
+                text: c.thinking,
+                ...(c.thinkingSignature ? { signature: c.thinkingSignature } : {}),
+              });
             } else if (c.type === 'toolCall') {
               allAssistantParts.push({
                 type: 'tool-call',
@@ -563,6 +569,7 @@ export const dbModelToChatModel = (m: DbChatModel): ChatModel => ({
   baseUrl: m.baseUrl,
   toolTimeoutSeconds: m.toolTimeoutSeconds,
   contextWindow: m.contextWindow,
+  azureApiVersion: m.azureApiVersion,
 });
 
 export const resolveDefaultModel = async (): Promise<ChatModel | null> => {

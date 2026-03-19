@@ -196,6 +196,8 @@ const sanitizeHistory = (messages: ChatMessage[], provider: ModelProvider): Chat
     case 'openai':
     case 'openrouter':
     case 'custom':
+    case 'azure':
+    case 'openai-codex':
     default:
       return sanitizeForOpenAI(messages);
   }
