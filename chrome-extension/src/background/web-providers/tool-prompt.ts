@@ -58,5 +58,5 @@ ${toolDefs}
 </available_tools>`;
 };
 
-export { buildToolPrompt };
+export { buildToolPrompt, escapeXml };
 export type { ToolDef };

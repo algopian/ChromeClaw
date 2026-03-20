@@ -93,24 +93,18 @@ describe('getSseStreamAdapter', () => {
     ).toThrow('GLM intl error');
   });
 
-  const defaultProviders: WebProviderId[] = [
-    'claude-web',
-    'chatgpt-web',
-    'doubao-web',
-  ];
-
-  for (const providerId of defaultProviders) {
-    it(`returns a default adapter for ${providerId}`, () => {
-      const adapter = getSseStreamAdapter(providerId);
-      // Default adapter passes delta through without phase logic
-      const result = adapter.processEvent({
-        parsed: { choices: [{ delta: { phase: 'think', content: 'ignored' } }] },
-        delta: 'raw delta',
-      });
-      expect(result).toEqual({ feedText: 'raw delta' });
-      expect(adapter.flush()).toBeNull();
+  it('returns a Claude adapter for claude-web', () => {
+    const adapter = getSseStreamAdapter('claude-web');
+    // Claude adapter extracts text from content_block_delta
+    const result = adapter.processEvent({
+      parsed: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hello' } },
+      delta: null,
     });
-  }
+    expect(result).toEqual({ feedText: 'hello' });
+  });
+
+  // Note: no providers currently use the default adapter (all have dedicated adapters).
+  // If a new provider is added without a dedicated adapter, add a test here.
 
   it('returns independent adapter instances per call', () => {
     const a = getSseStreamAdapter('qwen-web');

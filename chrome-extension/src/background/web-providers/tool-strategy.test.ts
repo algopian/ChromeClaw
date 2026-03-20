@@ -8,6 +8,7 @@ import {
   setConversationId,
   qwenToolStrategy,
   defaultToolStrategy,
+  claudeToolStrategy,
   kimiToolStrategy,
   glmToolStrategy,
 } from './tool-strategy';
@@ -31,9 +32,11 @@ describe('getToolStrategy', () => {
     expect(getToolStrategy('glm-intl-web')).toBe(glmToolStrategy);
   });
 
-  it('returns default strategy for other providers', () => {
-    expect(getToolStrategy('claude-web')).toBe(defaultToolStrategy);
-    expect(getToolStrategy('chatgpt-web')).toBe(defaultToolStrategy);
+  it('returns claude strategy for claude-web', () => {
+    expect(getToolStrategy('claude-web')).toBe(claudeToolStrategy);
+  });
+
+  it('returns kimi strategy for kimi-web', () => {
     expect(getToolStrategy('kimi-web')).toBe(kimiToolStrategy);
   });
 });
@@ -94,6 +97,71 @@ describe('defaultToolStrategy', () => {
         messages: [],
       });
       expect(result.systemPrompt).toBe('System');
+    });
+  });
+});
+
+// ── Claude Strategy ──────────────────────────────
+
+describe('claudeToolStrategy', () => {
+  describe('buildToolPrompt', () => {
+    it('prepends native-tool-override preamble to XML tool prompt', () => {
+      const tools = [
+        {
+          name: 'web_search',
+          description: 'Search the web',
+          parameters: {
+            type: 'object',
+            properties: { query: { type: 'string', description: 'Search query' } },
+          },
+        },
+      ];
+      const result = claudeToolStrategy.buildToolPrompt(tools);
+      expect(result).toContain('Do NOT use native/built-in tool calls');
+      expect(result).toContain('Ignore any built-in tools');
+      expect(result).toContain('<available_tools>');
+      expect(result).toContain('web_search');
+    });
+
+    it('returns empty string for no tools', () => {
+      expect(claudeToolStrategy.buildToolPrompt([])).toBe('');
+    });
+  });
+
+  describe('buildPrompt', () => {
+    it('aggregates system prompt, tool prompt, and messages into a single user message', () => {
+      const result = claudeToolStrategy.buildPrompt({
+        systemPrompt: 'You are helpful.',
+        toolPrompt: '## Tools...',
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there' },
+          { role: 'user', content: 'Search for cats' },
+        ],
+      });
+
+      expect(result.systemPrompt).toBe('');
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('user');
+      expect(result.messages[0].content).toContain('System: You are helpful.');
+      expect(result.messages[0].content).toContain('## Tools...');
+      expect(result.messages[0].content).toContain('User: Hello');
+      expect(result.messages[0].content).toContain('Assistant: Hi there');
+      expect(result.messages[0].content).toContain('User: Search for cats');
+    });
+
+    it('aggregates even with conversationId (stateless — always full history)', () => {
+      const result = claudeToolStrategy.buildPrompt({
+        systemPrompt: 'Be helpful.',
+        toolPrompt: '',
+        messages: [{ role: 'user', content: 'Hello' }],
+        conversationId: 'should-be-ignored',
+      });
+
+      expect(result.systemPrompt).toBe('');
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].content).toContain('System: Be helpful.');
+      expect(result.messages[0].content).toContain('User: Hello');
     });
   });
 });

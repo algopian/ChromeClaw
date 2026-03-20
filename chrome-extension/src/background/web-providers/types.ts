@@ -7,9 +7,7 @@
 /** Identifier for each supported web LLM provider. */
 type WebProviderId =
   | 'claude-web'
-  | 'chatgpt-web'
   | 'kimi-web'
-  | 'doubao-web'
   | 'qwen-web'
   | 'qwen-cn-web'
   | 'glm-web'
@@ -67,6 +65,8 @@ interface WebProviderDefinition {
   };
   /** Extract the text delta from a provider-specific SSE data payload. */
   parseSseDelta: (data: unknown) => string | null;
+  /** Optional post-login auth refresh (e.g., GLM token exchange). Called with the login tab still open. */
+  refreshAuth?: (opts: { tabId: number; cookies: Record<string, string> }) => Promise<Record<string, string> | null>;
 }
 
 export type { WebProviderId, WebAuthStatus, WebRequestOpts, WebProviderDefinition };

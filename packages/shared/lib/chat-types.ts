@@ -129,14 +129,12 @@ interface ChatModel {
 
 /** Web provider options for UI dropdowns and auth — single source of truth. */
 const WEB_PROVIDER_OPTIONS = [
-  { value: 'claude-web', label: 'Claude (claude.ai)', loginUrl: 'https://claude.ai', cookieDomain: '.claude.ai', sessionIndicators: ['sessionKey'], defaultModelId: 'claude-sonnet-4-5-20250929', defaultModelName: 'Claude Sonnet 4.5' },
-  { value: 'chatgpt-web', label: 'ChatGPT (chatgpt.com)', loginUrl: 'https://chatgpt.com', cookieDomain: '.chatgpt.com', sessionIndicators: ['__Secure-next-auth.session-token'], defaultModelId: 'gpt-4o', defaultModelName: 'GPT-4o' },
+  { value: 'claude-web', label: 'Claude (claude.ai)', loginUrl: 'https://claude.ai', cookieDomain: '.claude.ai', sessionIndicators: ['sessionKey'], defaultModelId: 'claude-sonnet-4.6', defaultModelName: 'Claude Sonnet 4.6' },
   { value: 'kimi-web', label: 'Kimi (kimi.com)', loginUrl: 'https://www.kimi.com', cookieDomain: '.kimi.com', sessionIndicators: ['access_token'], checkLocalStorage: true, defaultModelId: 'kimi', defaultModelName: 'Kimi' },
-  { value: 'doubao-web', label: 'Doubao (doubao.com)', loginUrl: 'https://doubao.com', cookieDomain: '.doubao.com', sessionIndicators: ['sessionid'], defaultModelId: 'doubao', defaultModelName: 'Doubao' },
   { value: 'qwen-web', label: 'Qwen (chat.qwen.ai)', loginUrl: 'https://chat.qwen.ai', cookieDomain: '.qwen.ai', sessionIndicators: ['token', 'ctoken', 'login_aliyunid_ticket'], defaultModelId: 'qwen3.5-plus', defaultModelName: 'Qwen 3.5 Plus' },
   { value: 'qwen-cn-web', label: 'Qwen CN (qianwen.com)', loginUrl: 'https://qianwen.com', cookieDomain: '.qianwen.com', sessionIndicators: ['tongyi_sso_ticket'], defaultModelId: 'qwen-max', defaultModelName: 'Qwen Max (CN)' },
-  { value: 'glm-web', label: 'GLM (chatglm.cn)', loginUrl: 'https://chatglm.cn', cookieDomain: '.chatglm.cn', sessionIndicators: ['chatglm_refresh_token', 'chatglm_token'], defaultModelId: 'glm-4', defaultModelName: 'GLM-4' },
-  { value: 'glm-intl-web', label: 'GLM Intl (chat.z.ai)', loginUrl: 'https://chat.z.ai', cookieDomain: '.z.ai', sessionIndicators: ['chatglm_refresh_token', 'chatglm_token', 'refresh_token', 'auth_token', 'access_token', 'token'], defaultModelId: 'glm-4', defaultModelName: 'GLM-4 International' },
+  { value: 'glm-web', label: 'GLM (chatglm.cn)', loginUrl: 'https://chatglm.cn', cookieDomain: '.chatglm.cn', sessionIndicators: ['chatglm_refresh_token', 'chatglm_token'], defaultModelId: 'glm-4', defaultModelName: 'GLM-4', refreshUrl: 'https://chatglm.cn/chatglm/user-api/user/refresh' },
+  { value: 'glm-intl-web', label: 'GLM Intl (chat.z.ai)', loginUrl: 'https://chat.z.ai', cookieDomain: '.z.ai', sessionIndicators: ['chatglm_refresh_token', 'chatglm_token', 'refresh_token', 'auth_token', 'access_token', 'token'], defaultModelId: 'glm-4', defaultModelName: 'GLM-4 International', refreshUrl: 'https://chat.z.ai/chatglm/user-api/user/refresh' },
 ] as const;
 
 /** Tool definition (metadata only — no execute function) */

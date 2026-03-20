@@ -101,54 +101,16 @@ const initiateWebLogin = async (
             if (cookieMap[name]) sessionCookies[name] = cookieMap[name];
           }
 
-          // GLM providers: refresh access token if we only have a refresh token
-          if (
-            (provider.id === 'glm-web' || provider.id === 'glm-intl-web') &&
-            !sessionCookies['chatglm_token'] &&
-            (sessionCookies['chatglm_refresh_token'] || sessionCookies['refresh_token'])
-          ) {
+          // Provider-specific auth refresh (e.g., GLM token exchange)
+          if (provider.refreshAuth) {
             try {
-              const refreshToken =
-                sessionCookies['chatglm_refresh_token'] || sessionCookies['refresh_token'];
-              const baseUrl =
-                provider.id === 'glm-web' ? 'https://chatglm.cn' : 'https://chat.z.ai';
-              const results = await chrome.scripting.executeScript({
-                target: { tabId },
-                func: async (refreshUrl: string, token: string) => {
-                  try {
-                    const res = await fetch(refreshUrl, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                        'App-Name': 'chatglm',
-                        'X-App-Platform': 'pc',
-                        'X-App-Version': '0.0.1',
-                      },
-                      body: JSON.stringify({}),
-                      credentials: 'include',
-                    });
-                    if (!res.ok) return null;
-                    const data = await res.json();
-                    return (
-                      data?.result?.access_token ??
-                      data?.result?.accessToken ??
-                      data?.accessToken ??
-                      null
-                    );
-                  } catch {
-                    return null;
-                  }
-                },
-                args: [`${baseUrl}/chatglm/user-api/user/refresh`, refreshToken],
-              });
-              const accessToken = results?.[0]?.result as string | null;
-              if (accessToken) {
-                sessionCookies['chatglm_token'] = accessToken;
-                authLog.info('GLM access token refreshed during login', { provider: provider.id });
+              const extra = await provider.refreshAuth({ tabId, cookies: sessionCookies });
+              if (extra) {
+                Object.assign(sessionCookies, extra);
+                authLog.info('Auth refreshed during login', { provider: provider.id });
               }
             } catch (err) {
-              authLog.warn('GLM token refresh failed during login', {
+              authLog.warn('Auth refresh failed during login', {
                 provider: provider.id,
                 error: String(err),
               });

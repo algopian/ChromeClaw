@@ -22,6 +22,9 @@ const TOOL_CALL_OPEN_START_RE = /^<tool_call(?:\s[^>]*)?>/i;
 const TOOL_CALL_OPEN_RE = /<tool_call(?:\s[^>]*)?>/i;
 const TOOL_CALL_CLOSE_RE = /<\/tool_call>/i;
 const TOOL_CALL_PREFIX_RE = /^<tool_call/i;
+/** Matches hallucinated tool_response tags — these are fake and should be discarded. */
+const TOOL_RESPONSE_OPEN_RE = /<tool_response(?:\s[^>]*)?>/i;
+const TOOL_RESPONSE_CLOSE_RE = /<\/tool_response>/i;
 
 /**
  * Create a stateful XML tag parser.
@@ -31,7 +34,7 @@ const createXmlTagParser = (): {
   feed: (chunk: string) => ParsedEvent[];
   flush: () => ParsedEvent[];
 } => {
-  let state: 'text' | 'thinking' | 'tool_call' = 'text';
+  let state: 'text' | 'thinking' | 'tool_call' | 'tool_response' = 'text';
   let buffer = '';
   let toolCallBuffer = '';
   /** Tag-level attributes from `<tool_call id="..." name="...">`, if present. */
@@ -115,9 +118,9 @@ const createXmlTagParser = (): {
     return { id: attrs.id, name: attrs.name };
   };
 
-  /** Test whether `s` could be the start of a `<think>` or `<tool_call...>` tag (case-insensitive). */
+  /** Test whether `s` could be the start of a `<think>`, `<tool_call...>`, or `<tool_response...>` tag (case-insensitive). */
   const isPlausibleTagPrefix = (s: string): boolean =>
-    s === '<' || /^<(?:th?i?n?k?|to?o?l?_?c?a?l?l?)/i.test(s);
+    s === '<' || /^<(?:th?i?n?k?|to?o?l?_?(?:c?a?l?l?|r?e?s?p?o?n?s?e?))/i.test(s);
 
   const feed = (chunk: string): ParsedEvent[] => {
     buffer += chunk;
@@ -130,6 +133,9 @@ const createXmlTagParser = (): {
         const toolMatch =
           buffer.match(TOOL_CALL_OPEN_START_RE) ?? buffer.match(TOOL_CALL_OPEN_RE);
         const toolIdx = toolMatch ? buffer.indexOf(toolMatch[0]) : -1;
+        // Detect hallucinated <tool_response> tags — consume and discard them
+        const responseMatch = buffer.match(TOOL_RESPONSE_OPEN_RE);
+        const responseIdx = responseMatch ? buffer.indexOf(responseMatch[0]) : -1;
 
         if (thinkIdx === 0) {
           state = 'thinking';
@@ -145,14 +151,20 @@ const createXmlTagParser = (): {
           toolCallBuffer = '';
           continue;
         }
+        if (responseIdx === 0 && responseMatch) {
+          // Enter discard state — skip everything until </tool_response>
+          state = 'tool_response';
+          buffer = buffer.slice(responseMatch[0].length);
+          continue;
+        }
 
         // Partial tag at buffer start — wait for more data.
         // For <think> (max 7 chars), 30 is plenty.
         // For <tool_call id="..." name="...">, attributes can push the opening
         // tag well past 30 chars, so we use a larger limit (200) when the buffer
-        // looks like a plausible tool_call tag that hasn't received its closing >.
-        if (buffer.startsWith('<') && !toolMatch) {
-          const limit = TOOL_CALL_PREFIX_RE.test(buffer) ? 200 : 30;
+        // looks like a plausible tool_call or tool_response tag that hasn't received its closing >.
+        if (buffer.startsWith('<') && !toolMatch && !responseMatch) {
+          const limit = TOOL_CALL_PREFIX_RE.test(buffer) || /^<tool_response/i.test(buffer) ? 200 : 30;
           if (isPlausibleTagPrefix(buffer) && buffer.length < limit) {
             break;
           }
@@ -162,6 +174,7 @@ const createXmlTagParser = (): {
         const nextTag = Math.min(
           thinkIdx >= 0 ? thinkIdx : Infinity,
           toolIdx >= 0 ? toolIdx : Infinity,
+          responseIdx >= 0 ? responseIdx : Infinity,
         );
 
         if (nextTag === Infinity) {
@@ -233,6 +246,15 @@ const createXmlTagParser = (): {
           toolCallBuffer = combined;
           buffer = '';
         }
+      } else if (state === 'tool_response') {
+        // Discard everything until </tool_response> — this is hallucinated content
+        const end = buffer.search(TOOL_RESPONSE_CLOSE_RE);
+        if (end >= 0) {
+          buffer = buffer.slice(end + 16); // len('</tool_response>') — always 16
+          state = 'text';
+        } else {
+          buffer = ''; // discard and wait for more data
+        }
       }
     }
 
@@ -263,6 +285,10 @@ const createXmlTagParser = (): {
         toolCallBuffer = '';
       }
       toolCallAttrs = undefined;
+      state = 'text';
+    } else if (state === 'tool_response') {
+      // Discard any remaining hallucinated tool_response content
+      buffer = '';
       state = 'text';
     } else if (buffer) {
       const cleaned = stripSpecialTokens(buffer);

@@ -81,11 +81,7 @@ export const requestWebGeneration = (opts: {
   const cacheKey = cachedProviderId ? `${cachedProviderId}:${opts.chatId ?? requestId}` : '';
 
   if (cachedProviderId) {
-    bridgeLog.debug('Using tool strategy', {
-      requestId,
-      providerId: cachedProviderId,
-      strategyType: strategy === undefined ? 'none' : (['qwen-web', 'qwen-cn-web'] as string[]).includes(cachedProviderId) ? 'qwen' : (['kimi-web'] as string[]).includes(cachedProviderId) ? 'kimi' : (['glm-web', 'glm-intl-web'] as string[]).includes(cachedProviderId) ? 'glm' : 'default',
-    });
+    bridgeLog.debug('Using tool strategy', { requestId, providerId: cachedProviderId });
   }
 
   let settled = false;

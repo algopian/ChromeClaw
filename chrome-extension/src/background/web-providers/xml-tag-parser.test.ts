@@ -518,3 +518,59 @@ describe('createXmlTagParser', () => {
     ]);
   });
 });
+
+describe('hallucinated tool_response suppression', () => {
+  it('discards <tool_response>...</tool_response> content entirely', () => {
+    const parser = createXmlTagParser();
+    const events = parser.feed(
+      'Hello<tool_response id="t1" name="web_fetch">\nSan Francisco: +55°F\n</tool_response>\nGoodbye',
+    );
+    expect(events).toEqual([
+      { type: 'text', text: 'Hello' },
+      { type: 'text', text: '\nGoodbye' },
+    ]);
+  });
+
+  it('discards tool_response after tool_call', () => {
+    const parser = createXmlTagParser();
+    const events = parser.feed(
+      '<tool_call id="a1" name="web_fetch">{"url":"https://example.com"}</tool_call>\n\n<tool_response id="a1" name="web_fetch">\nfake data\n</tool_response>\n\nReal answer here.',
+    );
+    const types = events.map(e => e.type);
+    expect(types).toContain('tool_call');
+    expect(types).not.toContain('tool_call_malformed');
+    // tool_response content should not appear in any text event
+    const textContent = events
+      .filter(e => e.type === 'text')
+      .map(e => (e as { type: 'text'; text: string }).text)
+      .join('');
+    expect(textContent).not.toContain('fake data');
+    expect(textContent).toContain('Real answer here.');
+  });
+
+  it('handles tool_response split across chunks', () => {
+    const parser = createXmlTagParser();
+    const e1 = parser.feed('Before<tool_response id="t1" name="search">');
+    const e2 = parser.feed('hallucinated content');
+    const e3 = parser.feed('</tool_response>After');
+    const all = [...e1, ...e2, ...e3];
+    const text = all
+      .filter(e => e.type === 'text')
+      .map(e => (e as { type: 'text'; text: string }).text)
+      .join('');
+    expect(text).toBe('BeforeAfter');
+  });
+
+  it('discards unclosed tool_response on flush', () => {
+    const parser = createXmlTagParser();
+    const e1 = parser.feed('Text<tool_response id="t1" name="x">no closing tag');
+    const e2 = parser.flush();
+    const all = [...e1, ...e2];
+    const text = all
+      .filter(e => e.type === 'text')
+      .map(e => (e as { type: 'text'; text: string }).text)
+      .join('');
+    expect(text).toBe('Text');
+    expect(text).not.toContain('no closing tag');
+  });
+});

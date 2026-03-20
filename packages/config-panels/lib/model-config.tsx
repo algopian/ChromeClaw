@@ -561,55 +561,49 @@ const ModelConfig = () => {
             if (cookieMap[name]) sessionCookies[name] = cookieMap[name];
           }
 
-          // GLM providers: refresh access token if we only have a refresh token.
-          // The GLM API requires a Bearer access token (chatglm_token) which must
-          // be obtained by calling the refresh endpoint with chatglm_refresh_token.
-          if (
-            (wp.value === 'glm-web' || wp.value === 'glm-intl-web') &&
-            !sessionCookies['chatglm_token'] &&
-            (sessionCookies['chatglm_refresh_token'] || sessionCookies['refresh_token'])
-          ) {
-            try {
-              const refreshToken =
-                sessionCookies['chatglm_refresh_token'] || sessionCookies['refresh_token'];
-              const baseUrl =
-                wp.value === 'glm-web' ? 'https://chatglm.cn' : 'https://chat.z.ai';
-              const results = await chrome.scripting.executeScript({
-                target: { tabId },
-                func: async (refreshUrl: string, token: string) => {
-                  try {
-                    const res = await fetch(refreshUrl, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                        'App-Name': 'chatglm',
-                        'X-App-Platform': 'pc',
-                        'X-App-Version': '0.0.1',
-                      },
-                      body: JSON.stringify({}),
-                      credentials: 'include',
-                    });
-                    if (!res.ok) return null;
-                    const data = await res.json();
-                    return (
-                      data?.result?.access_token ??
-                      data?.result?.accessToken ??
-                      data?.accessToken ??
-                      null
-                    );
-                  } catch {
-                    return null;
-                  }
-                },
-                args: [`${baseUrl}/chatglm/user-api/user/refresh`, refreshToken],
-              });
-              const accessToken = results?.[0]?.result as string | null;
-              if (accessToken) {
-                sessionCookies['chatglm_token'] = accessToken;
+          // Provider-specific token refresh (e.g., GLM access token exchange)
+          if ('refreshUrl' in wp && wp.refreshUrl) {
+            const refreshToken =
+              sessionCookies['chatglm_refresh_token'] || sessionCookies['refresh_token'];
+            if (refreshToken && !sessionCookies['chatglm_token']) {
+              try {
+                const results = await chrome.scripting.executeScript({
+                  target: { tabId },
+                  func: async (refreshUrl: string, token: string) => {
+                    try {
+                      const res = await fetch(refreshUrl, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`,
+                          'App-Name': 'chatglm',
+                          'X-App-Platform': 'pc',
+                          'X-App-Version': '0.0.1',
+                        },
+                        body: JSON.stringify({}),
+                        credentials: 'include',
+                      });
+                      if (!res.ok) return null;
+                      const data = await res.json();
+                      return (
+                        data?.result?.access_token ??
+                        data?.result?.accessToken ??
+                        data?.accessToken ??
+                        null
+                      );
+                    } catch {
+                      return null;
+                    }
+                  },
+                  args: [wp.refreshUrl, refreshToken],
+                });
+                const accessToken = results?.[0]?.result as string | null;
+                if (accessToken) {
+                  sessionCookies['chatglm_token'] = accessToken;
+                }
+              } catch {
+                /* token refresh failed — will retry at request time */
               }
-            } catch {
-              /* token refresh failed — will retry at request time */
             }
           }
 

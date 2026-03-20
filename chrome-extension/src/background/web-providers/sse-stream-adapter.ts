@@ -4,6 +4,7 @@
  * encapsulated independently of the bridge.
  */
 
+import { createClaudeStreamAdapter } from './claude-stream-adapter';
 import { createGlmStreamAdapter } from './glm-stream-adapter';
 import { createKimiStreamAdapter } from './kimi-stream-adapter';
 import { createQwenStreamAdapter } from './qwen-stream-adapter';
@@ -34,6 +35,8 @@ const createDefaultAdapter = (): SseStreamAdapter => ({
 
 const getSseStreamAdapter = (providerId: WebProviderId): SseStreamAdapter => {
   switch (providerId) {
+    case 'claude-web':
+      return createClaudeStreamAdapter();
     case 'qwen-web':
     case 'qwen-cn-web':
       return createQwenStreamAdapter();
