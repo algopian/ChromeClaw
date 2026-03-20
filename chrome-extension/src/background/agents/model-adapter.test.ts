@@ -423,6 +423,18 @@ describe('chatModelToPiModel', () => {
     expect(result.model.maxTokens).toBe(Math.floor(8192 * 0.25));
   });
 
+  // ── Web provider ───────────────────────────────
+
+  it('routes web provider with empty baseUrl and provider=web', () => {
+    const result = chatModelToPiModel(
+      makeModel({ provider: 'web', id: 'claude-web', name: 'Claude Web' }),
+    );
+
+    expect(result.model.api).toBe('openai-completions');
+    expect(result.model.baseUrl).toBe('');
+    expect(result.model.provider).toBe('web');
+  });
+
   it('does not override anthropic api even if api field is set', () => {
     // Anthropic has its own api; the explicit field still overrides
     // because the user explicitly set it — this tests the override behavior

@@ -9,7 +9,8 @@
       ]
     },
     "condition": {
-      "resourceTypes": ["xmlhttprequest"]
+      "resourceTypes": ["xmlhttprequest"],
+      "requestDomains": ["localhost", "127.0.0.1"]
     }
   }
 ]
