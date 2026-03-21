@@ -95,7 +95,7 @@ const providers = [
   { value: 'azure', label: 'Azure OpenAI' },
   { value: 'openai-codex', label: 'OpenAI Codex (ChatGPT)' },
   { value: 'custom', label: 'OpenAI Compatible' },
-  { value: 'web', label: 'Web (Browser Session)' },
+  { value: 'web', label: 'Web (Browser Session Zero Token)' },
   ...(WEBGPU_MODELS_ENABLED ? [{ value: 'local', label: 'WebGPU (On-Device)' }] : []),
 ];
 
@@ -270,7 +270,7 @@ const ModelConfig = () => {
           next.supportsTools = true;
           next.supportsReasoning = true;
           if (!next.webProviderId) {
-            next.webProviderId = 'claude-web';
+            next.webProviderId = 'gemini-web';
           }
           // Auto-fill modelId and name from web provider defaults
           const wp = WEB_PROVIDER_OPTIONS.find(w => w.value === next.webProviderId);
@@ -822,7 +822,11 @@ const ModelConfig = () => {
                   <SelectContent>
                     {providers.map(p => (
                       <SelectItem key={p.value} value={p.value}>
-                        {p.label}
+                        {p.value === 'web'
+                          ? t('provider_web')
+                          : p.value === 'custom'
+                            ? t('provider_openaiCompatible')
+                            : p.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

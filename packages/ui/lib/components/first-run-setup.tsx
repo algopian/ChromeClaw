@@ -77,7 +77,7 @@ const providers = [
     defaultBase: 'https://openrouter.ai/api/v1',
   },
   { value: 'custom', label: 'OpenAI Compatible', defaultModel: '', defaultBase: '' },
-  { value: 'web', label: 'Web (Browser Session)', defaultModel: '', defaultBase: '' },
+  { value: 'web', label: 'Web (Browser Session Zero Token)', defaultModel: '', defaultBase: '' },
 ];
 
 const TOTAL_STEPS = 5;
@@ -187,8 +187,8 @@ const Step1ModelSetup = ({ onNext, t }: { onNext: () => void; t: TFunction }) =>
     }
     // Auto-set default web provider when switching to web
     if (value === 'web' && !webProviderId) {
-      setWebProviderId('claude-web');
-      const wp = WEB_PROVIDER_OPTIONS.find(w => w.value === 'claude-web');
+      setWebProviderId('gemini-web');
+      const wp = WEB_PROVIDER_OPTIONS.find(w => w.value === 'gemini-web');
       if (wp) setModelId(wp.defaultModelId);
     }
     setError('');
@@ -286,7 +286,11 @@ const Step1ModelSetup = ({ onNext, t }: { onNext: () => void; t: TFunction }) =>
             <SelectContent>
               {providers.map(p => (
                 <SelectItem key={p.value} value={p.value}>
-                  {p.label}
+                  {p.value === 'web'
+                    ? t('provider_web')
+                    : p.value === 'custom'
+                      ? t('provider_openaiCompatible')
+                      : p.label}
                 </SelectItem>
               ))}
             </SelectContent>
