@@ -93,6 +93,8 @@ interface DbChatModel {
   contextWindow?: number;
   /** Azure OpenAI API version (e.g. '2025-04-01-preview'). Only used with azure provider. */
   azureApiVersion?: string;
+  /** Web provider identifier (e.g. 'claude-web'). Only used with web provider. */
+  webProviderId?: string;
 }
 
 /** DB-level memory chunk for BM25 search */

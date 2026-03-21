@@ -78,6 +78,11 @@ export const chatModelToPiModel = (config: ChatModel): ResolvedModel => {
       baseUrl = '';
       provider = 'local';
       break;
+    case 'web':
+      api = 'openai-completions'; // placeholder — not used for web
+      baseUrl = '';
+      provider = 'web';
+      break;
     default:
       api = 'openai-completions';
       baseUrl = config.baseUrl || DEFAULT_BASE_URLS.openai;

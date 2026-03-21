@@ -16,7 +16,7 @@ import {
 import { setProviderTokenLimit } from '../context/provider-limit-cache';
 import { createLogger } from '../logging/logger-buffer';
 import { getAgentTools, getToolConfig, getImplementedToolNames } from '../tools';
-import { buildSystemPrompt, resolveToolPromptHints, resolveToolListings } from '@extension/shared';
+import { buildSystemPrompt, buildWebSystemPrompt, buildLocalSystemPrompt, resolveToolPromptHints, resolveToolListings } from '@extension/shared';
 import {
   customModelsStorage,
   selectedModelStorage,
@@ -570,6 +570,7 @@ export const dbModelToChatModel = (m: DbChatModel): ChatModel => ({
   toolTimeoutSeconds: m.toolTimeoutSeconds,
   contextWindow: m.contextWindow,
   azureApiVersion: m.azureApiVersion,
+  webProviderId: m.webProviderId,
 });
 
 export const resolveDefaultModel = async (): Promise<ChatModel | null> => {
@@ -603,6 +604,7 @@ export const buildHeadlessSystemPrompt = async (
 
   const availableTools = getImplementedToolNames();
   const isLocal = model.provider === 'local';
+  const isWeb = model.provider === 'web';
 
   // For local models, restrict tool listings to the allowlist to keep system prompt small
   const effectiveEnabledTools = isLocal
@@ -611,8 +613,8 @@ export const buildHeadlessSystemPrompt = async (
       )
     : toolConfig.enabledTools;
 
-  const { text } = buildSystemPrompt({
-    mode: isLocal ? 'minimal' : 'full',
+  const promptConfig = {
+    mode: isLocal ? 'minimal' as const : 'full' as const,
     tools: resolveToolListings(effectiveEnabledTools, isLocal ? [] : agent?.customTools, availableTools),
     toolPromptHints: resolveToolPromptHints(
       effectiveEnabledTools,
@@ -633,7 +635,15 @@ export const buildHeadlessSystemPrompt = async (
       modelName: model.name,
       currentDate: new Date().toISOString().split('T')[0],
     },
-  });
+  };
+
+  // Web/local providers inject their own XML tool instructions downstream,
+  // so use dedicated builders that omit the competing ## Tooling section
+  const { text } = isWeb
+    ? buildWebSystemPrompt(promptConfig)
+    : isLocal
+      ? buildLocalSystemPrompt(promptConfig)
+      : buildSystemPrompt(promptConfig);
 
   return text;
 };
