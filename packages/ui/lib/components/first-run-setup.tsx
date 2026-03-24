@@ -221,7 +221,7 @@ const Step1ModelSetup = ({ onNext, t }: { onNext: () => void; t: TFunction }) =>
       return;
     }
     if (isWeb && webAuthStatus !== 'logged-in') {
-      setError('You must log in to the web provider before continuing. Click the Login button above.');
+      setError('You must log in to the web provider before continuing.');
       return;
     }
     if (!isWeb && !modelId.trim()) {

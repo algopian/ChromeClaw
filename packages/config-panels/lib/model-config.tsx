@@ -328,7 +328,7 @@ const ModelConfig = () => {
       return;
     }
     if (editForm.provider === 'web' && webAuthStatus !== 'logged-in') {
-      setFormError('You must log in to the web provider before saving. Click the Login button above.');
+      setFormError('You must log in to the web provider before saving.');
       return;
     }
 
